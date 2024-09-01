@@ -38,14 +38,13 @@ public class MidiJam extends JFrame {
 
 	private static final int DEFAULT_PORT = 5000;
 	private static final int MAX_ID = 9999;
-	private DatagramSocket socket;
-	private InetAddress serverAddress;
-	private int port = DEFAULT_PORT;
+	private static DatagramSocket socket;
+	private static InetAddress serverAddress;
+	private static int port = DEFAULT_PORT;
 	private boolean running = false;
 	private boolean isServer = false;
-	private int clientId = -1;
 	private String clientName = "Default";
-	private JTextArea statusArea;
+	private static JTextArea statusArea;
 	private JTextField ipField;
 	private JTextField portField;
 	private JTextField nameField;
@@ -61,14 +60,10 @@ public class MidiJam extends JFrame {
 	private static class ClientInfo {
 		InetAddress address;
 		int port;
-		int id;
-		String name;
 
 		ClientInfo(InetAddress address, int port, int id, String name) {
 			this.address = address;
 			this.port = port;
-			this.id = id;
-			this.name = name;
 		}
 	}
 
@@ -333,7 +328,7 @@ public class MidiJam extends JFrame {
 		panel.add(singleMIDIOutputOnly, gbc_btnNewButton_1);
 
 		startStopButton = new JButton("Start");
-		startStopButton.addActionListener(e -> toggleStartStop());
+		startStopButton.addActionListener(e -> toggleServerClient());
 		Configure_Panel.add(startStopButton, BorderLayout.SOUTH);
 
 		JPanel chatPanel = new JPanel();
@@ -374,7 +369,7 @@ public class MidiJam extends JFrame {
 
 	}
 
-	private void toggleStartStop() {
+	private void toggleServerClient() {
 		if (running) {
 			stop();
 		} else {
@@ -383,134 +378,145 @@ public class MidiJam extends JFrame {
 	}
 
 	private void start() {
-		if (running)
-			return;
 		try {
-			port = Integer.parseInt(portField.getText());
-			clientName = nameField.getText();
-
-			isServer = serverButton.isSelected();
-
-			if (isServer) {
-				socket = new DatagramSocket(port);
-				running = true;
-				statusArea.append("Server started on port " + port + "\n");
-				new Thread(this::listenForClients).start();
-				startStopButton.setText("Stop");
+			if (serverButton.isSelected()) {
+				startServer();
 			} else {
-				serverAddress = InetAddress.getByName(ipField.getText());
-				socket = new DatagramSocket();
-				running = true;
-				statusArea.append("Client connected to server at " + serverAddress + ":" + port + "\n");
-				receiveClientId();
-				startStopButton.setText("Stop");
+				startClient();
 			}
 		} catch (Exception e) {
 			statusArea.append("Error starting: " + e.getMessage() + "\n");
 		}
-		startMidiRouting();
 	}
 
 	private void stop() {
 		running = false;
-		if (socket != null && !socket.isClosed()) {
-			socket.close();
-		}
 		stopMidiRouting();
-		statusArea.append(isServer ? "Server stopped.\n" : "Client disconnected.\n");
 		startStopButton.setText("Start");
+		socket.close();
+		statusArea.append("Server/Client stopped.\n");
 	}
 
-	private void receiveClientId() {
-		new Thread(() -> {
-			while (running) {
-				try {
-					byte[] buffer = new byte[1024];
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-					socket.receive(packet);
-					String message = new String(packet.getData(), 0, packet.getLength());
-					if (message.startsWith("ID ")) {
-						clientId = Integer.parseInt(message.substring(3));
-						statusArea.append("Received client ID: " + clientId + "\n");
-					} else {
-						statusArea.append(message + "\n");
-					}
-					scrollToBottom();
-				} catch (IOException e) {
-					if (running) {
-						statusArea.append("Error receiving ID packet: " + e.getMessage() + "\n");
-					}
-				}
-			}
-		}).start();
+	private void startServer() throws IOException, MidiUnavailableException {
+		isServer = true;
+		running = true;
+		port = Integer.parseInt(portField.getText().trim());
+
+		socket = new DatagramSocket(port);
+		statusArea.append("Server started on port " + port + "\n");
+
+		// Start MIDI setup
+		// setUpMidiOutput();
+
+		new Thread(this::listenForClients).start();
+		startStopButton.setText("Stop");
 	}
 
-	private void sendMessage() {
-		if (!running)
-			return;
-		try {
-			String message = messageField.getText();
-			if (isServer) {
-				for (ClientInfo client : clients.values()) {
-					String formattedMessage = clientName + ": " + message;
-					DatagramPacket packet = new DatagramPacket(formattedMessage.getBytes(), formattedMessage.length(),
-							client.address, client.port);
-					socket.send(packet);
-				}
-				statusArea.append("Server broadcasted message: " + message + "\n");
-			} else {
-				String formattedMessage = clientName + ": " + message;
-				DatagramPacket packet = new DatagramPacket(formattedMessage.getBytes(), formattedMessage.length(),
-						serverAddress, port);
-				socket.send(packet);
-				statusArea.append("Me (" + clientName + "): " + message + "\n");
-			}
-			messageField.setText("");
-			scrollToBottom();
-		} catch (IOException e) {
-			statusArea.append("Error sending message: " + e.getMessage() + "\n");
-		}
+	private void startClient() throws IOException, MidiUnavailableException {
+		isServer = false;
+		running = true;
+		clientName = nameField.getText().trim();
+		serverAddress = InetAddress.getByName(ipField.getText().trim());
+		port = Integer.parseInt(portField.getText().trim());
+
+		socket = new DatagramSocket();
+		statusArea.append("Client started. Connecting to " + serverAddress + ":" + port + "\n");
+
+		// Request client ID from server
+		sendClientInfo();
+
+		// Start MIDI setup
+		startMidiRouting();
+
+		new Thread(this::listenForServer).start();
+		startStopButton.setText("Stop");
+	}
+
+	private void sendClientInfo() throws IOException {
+		String infoMessage = "INFO:" + clientName;
+		DatagramPacket packet = new DatagramPacket(infoMessage.getBytes(), infoMessage.length(), serverAddress, port);
+		socket.send(packet);
 	}
 
 	private void listenForClients() {
+		while (running) {
+			try {
+				byte[] buffer = new byte[128];
+				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+				socket.receive(packet);
+				String message = new String(packet.getData(), 0, packet.getLength());
+				statusArea.append("Received message: " + message + "\n"); // Debug line
+				InetAddress clientAddress = packet.getAddress();
+				int clientPort = packet.getPort();
+
+				String[] parts = message.split(":", 3);
+				if (parts.length >= 2) {
+					String type = parts[0];
+					String clientName = parts[1];
+					String content = parts.length > 2 ? parts[2] : "";
+
+					if (type.equals("TEXT")) {
+						statusArea.append(clientName + ": " + content + "\n");
+						// Scroll to the bottom of the status area
+						scrollToBottom();
+						// Relay text messages to all clients except the sender
+						for (ClientInfo client : clients.values()) {
+							if (client.port != clientPort) {
+								DatagramPacket responsePacket = new DatagramPacket(message.getBytes(), message.length(),
+										client.address, client.port);
+								socket.send(responsePacket);
+							}
+						}
+					} else if (type.equals("INFO")) {
+						// Register a new client
+						int id = assignClientId();
+						clients.put(id, new ClientInfo(clientAddress, clientPort, id, clientName));
+						statusArea.append("New client connected: " + clientName + " (ID: " + id + ")\n");
+						scrollToBottom();
+					} else if (type.equals("MIDI")) {
+						statusArea.append(clientName + ":" + content + "\n");
+						scrollToBottom();
+						// Relay MIDI messages to all clients except the sender
+						for (ClientInfo client : clients.values()) {
+							if (client.port != clientPort) {
+								DatagramPacket responsePacket = new DatagramPacket(message.getBytes(), message.length(),
+										client.address, client.port);
+								socket.send(responsePacket);
+							}
+						}
+					}
+				}
+			} catch (IOException e) {
+				if (running) {
+					statusArea.append("Error receiving packet: " + e.getMessage() + "\n");
+					scrollToBottom();
+				}
+			}
+		}
+	}
+
+	private void listenForServer() {
 		while (running) {
 			try {
 				byte[] buffer = new byte[1024];
 				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 				socket.receive(packet);
 				String message = new String(packet.getData(), 0, packet.getLength());
-				InetAddress clientAddress = packet.getAddress();
-				int clientPort = packet.getPort();
 
-				ClientInfo client = clients.values().stream()
-						.filter(c -> c.address.equals(clientAddress) && c.port == clientPort).findFirst().orElse(null);
+				String[] parts = message.split(":", 3);
+				if (parts.length >= 2) {
+					String type = parts[0];
+					String clientName = parts[1];
+					String content = parts.length > 2 ? parts[2] : "";
 
-				if (client == null) {
-					int newClientId = generateRandomId();
-					client = new ClientInfo(clientAddress, clientPort, newClientId, "Client" + newClientId);
-					clients.put(newClientId, client);
-					statusArea.append(
-							"Client connected: ID " + newClientId + " at " + clientAddress + ":" + clientPort + "\n");
-
-					// Send the new client ID to the client
-					String idMessage = "ID " + newClientId;
-					DatagramPacket idPacket = new DatagramPacket(idMessage.getBytes(), idMessage.length(),
-							clientAddress, clientPort);
-					socket.send(idPacket);
-				}
-
-				String formattedMessage = client.name + ": " + message;
-				statusArea.append(formattedMessage + "\n");
-
-				// Relay the message to all clients except the sender
-				for (ClientInfo c : clients.values()) {
-					if (c.id != client.id) {
-						DatagramPacket responsePacket = new DatagramPacket(formattedMessage.getBytes(),
-								formattedMessage.length(), c.address, c.port);
-						socket.send(responsePacket);
+					if (type.equals("TEXT")) {
+						statusArea.append(clientName + ": " + content + "\n");
+					} else if (type.equals("MIDI")) {
+						// Handle MIDI messages from server
+						handleMIDIMessage(clientName + ":" + content);
+						scrollToBottom();
 					}
 				}
-				scrollToBottom();
 			} catch (IOException e) {
 				if (running) {
 					statusArea.append("Error receiving packet: " + e.getMessage() + "\n");
@@ -519,13 +525,81 @@ public class MidiJam extends JFrame {
 		}
 	}
 
-	private int generateRandomId() {
-		int randomId;
+	private void handleMIDIMessage(String content) {
+		try {
+			ShortMessage shortMessage = convertStringToShortMessage(content);
+
+			if (outputDevice1 != null && outputDevice1.isOpen()) {
+				try {
+					outputDevice1.getReceiver().send(shortMessage, -1);
+				} catch (MidiUnavailableException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			if (outputDevice2 != null && outputDevice2.isOpen() && !singleOut) {
+				try {
+					outputDevice2.getReceiver().send(shortMessage, -1);
+				} catch (MidiUnavailableException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		} catch (InvalidMidiDataException e) {
+			statusArea.append("Invalid MIDI data: " + content + "\n");
+		}
+	}
+
+	private ShortMessage convertStringToShortMessage(String content) throws InvalidMidiDataException {
+		String[] parts = content.split(":");
+		if (parts.length == 4) {
+			int command = Integer.parseInt(parts[0]);
+			int channel = Integer.parseInt(parts[1]);
+			int data1 = Integer.parseInt(parts[2]);
+			int data2 = Integer.parseInt(parts[3]);
+
+			ShortMessage shortMessage = new ShortMessage();
+			shortMessage.setMessage(command, channel, data1, data2);
+			return shortMessage;
+		} else {
+			throw new InvalidMidiDataException("Invalid MIDI message format.");
+		}
+	}
+
+	private void sendMessage() {
+		String message = messageField.getText().trim();
+		if (!message.isEmpty()) {
+			try {
+				String messageToSend = "TEXT:" + clientName + ":" + message;
+				byte[] messageBytes = messageToSend.getBytes();
+
+				DatagramPacket packet;
+				if (isServer) {
+					// Send text messages to all clients
+					for (ClientInfo client : clients.values()) {
+						packet = new DatagramPacket(messageBytes, messageBytes.length, client.address, client.port);
+						socket.send(packet);
+					}
+				} else {
+					packet = new DatagramPacket(messageBytes, messageBytes.length, serverAddress, port);
+					socket.send(packet);
+				}
+
+				statusArea.append("You: " + message + "\n");
+				messageField.setText("");
+			} catch (IOException e) {
+				statusArea.append("Error sending message: " + e.getMessage() + "\n");
+			}
+		}
+	}
+
+	private int assignClientId() {
+		int id;
 		do {
-			randomId = random.nextInt(MAX_ID + 1);
-		} while (assignedIds.contains(randomId));
-		assignedIds.add(randomId);
-		return randomId;
+			id = random.nextInt(MAX_ID);
+		} while (assignedIds.contains(id));
+		assignedIds.add(id);
+		return id;
 	}
 
 	private void scrollToBottom() {
@@ -591,8 +665,8 @@ public class MidiJam extends JFrame {
 							}
 						} else {
 							multiOutputReceiver.send(transposedMessage, timeStamp);
-							
 						}
+
 					} catch (InvalidMidiDataException e) {
 						e.printStackTrace();
 					}
@@ -602,6 +676,13 @@ public class MidiJam extends JFrame {
 					multiOutputReceiver.send(shortMessage, timeStamp);
 				}
 			}
+
+			sendMidiToServer(transposedMessage);
+			System.out.println("Command: " + transposedMessage.getCommand());
+			System.out.println("Channel: " + transposedMessage.getChannel());
+			System.out.println("Data1: " + transposedMessage.getData1());
+			System.out.println("Data2: " + transposedMessage.getData2());
+
 		}
 
 		@Override
@@ -609,6 +690,28 @@ public class MidiJam extends JFrame {
 			multiOutputReceiver.close();
 		}
 
+	}
+
+	private static void sendMidiToServer(MidiMessage message) {
+		if (serverAddress != null && socket != null) {
+			try {
+				String midiMessage = "MIDI:" + convertMidiMessageToString(message);
+				DatagramPacket packet = new DatagramPacket(midiMessage.getBytes(), midiMessage.length(), serverAddress,
+						port);
+				socket.send(packet);
+			} catch (IOException e) {
+				statusArea.append("Error sending MIDI message to server: " + e.getMessage() + "\n");
+			}
+		}
+	}
+
+	private static String convertMidiMessageToString(MidiMessage message) {
+		if (message instanceof ShortMessage) {
+			ShortMessage shortMessage = (ShortMessage) message;
+			return String.format("%d:%d:%d:%d", shortMessage.getCommand(), shortMessage.getChannel(),
+					shortMessage.getData1(), shortMessage.getData2());
+		}
+		return "";
 	}
 
 	static class MultiOutputReceiver implements Receiver {
