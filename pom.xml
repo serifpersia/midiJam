@@ -1,0 +1,46 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.serifpersia.midiJam</groupId>
+	<artifactId>midiJam</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>MIDI Router</name>
+	<dependencies>
+		<dependency>
+			<groupId>com.formdev</groupId>
+			<artifactId>flatlaf</artifactId>
+			<version>3.1.1</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<!-- Add the maven-assembly-plugin for creating a fat JAR -->
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<version>3.3.0</version>
+				<executions>
+					<execution>
+						<phase>install</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<descriptorRefs>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
+					</descriptorRefs>
+					<archive>
+						<manifest>
+							<mainClass>
+								midiJam.MidiJam</mainClass>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
