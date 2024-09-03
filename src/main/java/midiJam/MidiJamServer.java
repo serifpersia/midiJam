@@ -39,7 +39,7 @@ public class MidiJamServer extends JFrame {
 
 	public MidiJamServer() {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setSize(300, 325);
+		setSize(300, 200);
 		setTitle("MidiJam Server");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 
@@ -129,12 +129,16 @@ public class MidiJamServer extends JFrame {
 		DatagramPacket idPacket = new DatagramPacket(idMessage.getBytes(), idMessage.length(), clientAddress,
 				clientPort);
 		serverSocket.send(idPacket);
+
+		broadcastClientCount();
 	}
 
 	private void handleDisconnectMessage(String message) {
 		int clientId = Integer.parseInt(message.substring(11));
 		connectedClients.remove(clientId);
 		appendStatus("Client: " + clientId + " disconnected");
+
+		broadcastClientCount();
 	}
 
 	private void handleTextOrMidiMessage(String message) {
@@ -172,6 +176,13 @@ public class MidiJamServer extends JFrame {
 
 	private void appendStatus(String message) {
 		SwingUtilities.invokeLater(() -> statusArea.append(message + "\n"));
+	}
+
+	private void broadcastClientCount() {
+		String countMessage = "COUNT:" + connectedClients.size();
+		for (ClientInfo client : connectedClients.values()) {
+			sendPacketToClient(countMessage, client);
+		}
 	}
 
 	private int assignClientId() {

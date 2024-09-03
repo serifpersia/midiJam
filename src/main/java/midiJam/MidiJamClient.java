@@ -3,9 +3,17 @@ package midiJam;
 import java.awt.*;
 import java.net.*;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
+
 import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -39,11 +47,34 @@ public class MidiJamClient extends JFrame {
 
 	private JToggleButton tglConnect;
 
-	private static JTextArea statusArea;
+	private static JTextPane statusArea;
 	private JTextField messageField;
 	private JButton sendButton;
 
 	private JLabel lb_inSessionCount;
+
+	private static final Color[] CHAT_COLORS = { new Color(0, 191, 255), new Color(50, 205, 50), new Color(255, 140, 0),
+			new Color(255, 105, 180), new Color(255, 215, 0), new Color(0, 255, 255), new Color(148, 0, 211),
+			new Color(0, 255, 127), new Color(255, 69, 0), new Color(255, 20, 147) };
+
+	private static final Map<Integer, Color> clientColorMap = new HashMap<>();
+	private static final Random random = new Random();
+
+	public static Color getColorForClientId(int id) {
+		if (id == clientId) {
+			return Color.RED;
+		} else {
+			return clientColorMap.computeIfAbsent(id, k -> getRandomColor());
+		}
+	}
+
+	private static Color getRandomColor() {
+		Color color;
+		do {
+			color = CHAT_COLORS[random.nextInt(CHAT_COLORS.length)];
+		} while (color.equals(Color.RED)); // Avoid red
+		return color;
+	}
 
 	public static void main(String[] args) {
 		EventQueue.invokeLater(() -> {
@@ -59,7 +90,7 @@ public class MidiJamClient extends JFrame {
 
 	public MidiJamClient() throws MidiUnavailableException {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setSize(300, 325);
+		setSize(350, 450);
 		setTitle("MidiJam Client");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 
@@ -147,18 +178,29 @@ public class MidiJamClient extends JFrame {
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 		getContentPane().add(tabbedPane, BorderLayout.CENTER);
 
-		new ButtonGroup();
-
-		JPanel connectPanel = new JPanel();
+		JPanel connectPanel = createConnectPanel();
 		tabbedPane.addTab("Connect", null, connectPanel, null);
-		connectPanel.setLayout(new BorderLayout());
 
-		JPanel connectbtn_Panel = new JPanel();
-		connectPanel.add(connectbtn_Panel, BorderLayout.SOUTH);
-		connectbtn_Panel.setLayout(new BorderLayout(0, 0));
+		JPanel chatPanel = createChatPanel();
+		tabbedPane.addTab("Chat", null, chatPanel, null);
+	}
+
+	private JPanel createConnectPanel() {
+		JPanel connectPanel = new JPanel(new BorderLayout());
+
+		JPanel connectBtnPanel = createConnectBtnPanel();
+		connectPanel.add(connectBtnPanel, BorderLayout.SOUTH);
+
+		JPanel dropdownsPanel = createDropdownsPanel();
+		connectPanel.add(dropdownsPanel, BorderLayout.CENTER);
+
+		return connectPanel;
+	}
+
+	private JPanel createConnectBtnPanel() {
+		JPanel connectBtnPanel = new JPanel(new BorderLayout(0, 0));
 
 		tglConnect = new JToggleButton("Connect");
-
 		tglConnect.addActionListener(e -> {
 			if (tglConnect.isSelected()) {
 				startClient();
@@ -166,93 +208,78 @@ public class MidiJamClient extends JFrame {
 				closeClient();
 			}
 		});
-		connectbtn_Panel.add(tglConnect);
+		connectBtnPanel.add(tglConnect, BorderLayout.CENTER);
 
-		JPanel dropdowns_Panel = new JPanel();
-		connectPanel.add(dropdowns_Panel, BorderLayout.CENTER);
-		GridBagLayout gbl_dropdowns_Panel = new GridBagLayout();
-		gbl_dropdowns_Panel.columnWidths = new int[] { 0, 0, 0 };
-		gbl_dropdowns_Panel.rowHeights = new int[] { 0, 0, 0, 0, 0 };
-		gbl_dropdowns_Panel.columnWeights = new double[] { 0.0, 1.0, Double.MIN_VALUE };
-		gbl_dropdowns_Panel.rowWeights = new double[] { 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE };
-		dropdowns_Panel.setLayout(gbl_dropdowns_Panel);
+		return connectBtnPanel;
+	}
 
-		JLabel lbMidiInput = new JLabel("MIDI Input");
-		GridBagConstraints gbc_lbMidiInput = new GridBagConstraints();
-		gbc_lbMidiInput.insets = new Insets(0, 0, 5, 5);
-		gbc_lbMidiInput.anchor = GridBagConstraints.EAST;
-		gbc_lbMidiInput.gridx = 0;
-		gbc_lbMidiInput.gridy = 0;
-		dropdowns_Panel.add(lbMidiInput, gbc_lbMidiInput);
+	private JPanel createDropdownsPanel() {
+		JPanel dropdownsPanel = new JPanel(new GridBagLayout());
+		GridBagConstraints gbc = new GridBagConstraints();
 
-		GridBagConstraints gbc_inputDeviceDropdown = new GridBagConstraints();
-		gbc_inputDeviceDropdown.insets = new Insets(0, 0, 5, 0);
-		gbc_inputDeviceDropdown.fill = GridBagConstraints.HORIZONTAL;
-		gbc_inputDeviceDropdown.gridx = 1;
-		gbc_inputDeviceDropdown.gridy = 0;
-		dropdowns_Panel.add(inputDeviceDropdown, gbc_inputDeviceDropdown);
+		addLabelToPanel("MIDI Input", dropdownsPanel, gbc, 0, 0);
+		addDropdownToPanel(inputDeviceDropdown, dropdownsPanel, gbc, 1, 0);
 
-		JLabel lblMidiOut = new JLabel("MIDI Out");
-		GridBagConstraints gbc_lblMidiOut = new GridBagConstraints();
-		gbc_lblMidiOut.anchor = GridBagConstraints.EAST;
-		gbc_lblMidiOut.insets = new Insets(0, 0, 5, 5);
-		gbc_lblMidiOut.gridx = 0;
-		gbc_lblMidiOut.gridy = 1;
-		dropdowns_Panel.add(lblMidiOut, gbc_lblMidiOut);
+		addLabelToPanel("MIDI Out", dropdownsPanel, gbc, 0, 1);
+		addDropdownToPanel(outputDeviceDropdown, dropdownsPanel, gbc, 1, 1);
 
-		GridBagConstraints gbc_outputDeviceDropdown = new GridBagConstraints();
-		gbc_outputDeviceDropdown.insets = new Insets(0, 0, 5, 0);
-		gbc_outputDeviceDropdown.fill = GridBagConstraints.HORIZONTAL;
-		gbc_outputDeviceDropdown.gridx = 1;
-		gbc_outputDeviceDropdown.gridy = 1;
-		dropdowns_Panel.add(outputDeviceDropdown, gbc_outputDeviceDropdown);
+		addLabelToPanel("MIDI Ch", dropdownsPanel, gbc, 0, 2);
+		midi_ch_list_dropdown = createMidiChannelDropdown();
+		addDropdownToPanel(midi_ch_list_dropdown, dropdownsPanel, gbc, 1, 2);
 
-		JLabel lblMidiCh = new JLabel("MIDI Ch");
-		GridBagConstraints gbc_lblMidiCh = new GridBagConstraints();
-		gbc_lblMidiCh.anchor = GridBagConstraints.EAST;
-		gbc_lblMidiCh.insets = new Insets(0, 0, 5, 5);
-		gbc_lblMidiCh.gridx = 0;
-		gbc_lblMidiCh.gridy = 2;
-		dropdowns_Panel.add(lblMidiCh, gbc_lblMidiCh);
+		lb_inSessionCount = new JLabel("In Session: ?");
+		gbc.gridwidth = 2;
+		gbc.insets = new Insets(0, 0, 0, 5);
+		gbc.gridx = 0;
+		gbc.gridy = 3;
+		dropdownsPanel.add(lb_inSessionCount, gbc);
 
-		midi_ch_list_dropdown = new JComboBox<Object>();
+		return dropdownsPanel;
+	}
 
+	private void addLabelToPanel(String text, JPanel panel, GridBagConstraints gbc, int x, int y) {
+		JLabel label = new JLabel(text);
+		gbc.anchor = GridBagConstraints.EAST;
+		gbc.insets = new Insets(0, 0, 5, 5);
+		gbc.gridx = x;
+		gbc.gridy = y;
+		panel.add(label, gbc);
+	}
+
+	private void addDropdownToPanel(JComponent dropdown, JPanel panel, GridBagConstraints gbc, int x, int y) {
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		gbc.insets = new Insets(0, 0, 5, 0);
+		gbc.gridx = x;
+		gbc.gridy = y;
+		panel.add(dropdown, gbc);
+	}
+
+	private JComboBox<Object> createMidiChannelDropdown() {
+		JComboBox<Object> dropdown = new JComboBox<>();
 		for (int i = 0; i < 16; i++) {
-			midi_ch_list_dropdown.addItem("CH" + String.format("%02d", i + 1));
+			dropdown.addItem("CH" + String.format("%02d", i + 1));
 		}
+		dropdown.addActionListener(e -> customChannel = dropdown.getSelectedIndex());
+		return dropdown;
+	}
 
-		GridBagConstraints gbc_midi_ch_list_dropdown = new GridBagConstraints();
-		gbc_midi_ch_list_dropdown.insets = new Insets(0, 0, 5, 0);
-		gbc_midi_ch_list_dropdown.fill = GridBagConstraints.HORIZONTAL;
-		gbc_midi_ch_list_dropdown.gridx = 1;
-		gbc_midi_ch_list_dropdown.gridy = 2;
+	private JPanel createChatPanel() {
+		JPanel chatPanel = new JPanel(new BorderLayout(0, 0));
 
-		midi_ch_list_dropdown.addActionListener(e -> {
-			int selectedIndex = midi_ch_list_dropdown.getSelectedIndex();
-			customChannel = selectedIndex;
-		});
-
-		dropdowns_Panel.add(midi_ch_list_dropdown, gbc_midi_ch_list_dropdown);
-
-		lb_inSessionCount = new JLabel("In Session: 0/100");
-		GridBagConstraints gbc_lb_inSessionCount = new GridBagConstraints();
-		gbc_lb_inSessionCount.gridwidth = 2;
-		gbc_lb_inSessionCount.insets = new Insets(0, 0, 0, 5);
-		gbc_lb_inSessionCount.gridx = 0;
-		gbc_lb_inSessionCount.gridy = 3;
-		dropdowns_Panel.add(lb_inSessionCount, gbc_lb_inSessionCount);
-
-		JPanel chatPanel = new JPanel();
-		tabbedPane.addTab("Chat", null, chatPanel, null);
-		chatPanel.setLayout(new BorderLayout(0, 0));
-
-		statusArea = new JTextArea();
+		statusArea = new JTextPane();
 		statusArea.setEditable(false);
 		JScrollPane statusScrollPane = new JScrollPane(statusArea);
 		statusScrollPane.setBorder(BorderFactory.createTitledBorder("Status"));
+		chatPanel.add(statusScrollPane, BorderLayout.CENTER);
 
-		JPanel messagePanel = new JPanel();
-		messagePanel.setLayout(new BorderLayout());
+		JPanel messagePanel = createMessagePanel();
+		chatPanel.add(messagePanel, BorderLayout.SOUTH);
+
+		return chatPanel;
+	}
+
+	private JPanel createMessagePanel() {
+		JPanel messagePanel = new JPanel(new BorderLayout());
 
 		messageField = new JTextField();
 		messageField.addActionListener(e -> sendMessage());
@@ -262,8 +289,7 @@ public class MidiJamClient extends JFrame {
 		sendButton.addActionListener(e -> sendMessage());
 		messagePanel.add(sendButton, BorderLayout.EAST);
 
-		chatPanel.add(statusScrollPane, BorderLayout.CENTER);
-		chatPanel.add(messagePanel, BorderLayout.SOUTH);
+		return messagePanel;
 	}
 
 	private void startClient() {
@@ -309,6 +335,10 @@ public class MidiJamClient extends JFrame {
 			}
 		}
 		return null;
+	}
+
+	private void updateSessionLabel(int count) {
+		lb_inSessionCount.setText("In Session: " + count);
 	}
 
 	private void connectToServer() throws IOException {
@@ -362,7 +392,8 @@ public class MidiJamClient extends JFrame {
 			try {
 				String fullMessage = "TEXT:" + clientId + ":" + clientName + ":" + message;
 				sendPacket(fullMessage.getBytes());
-				appendStatus(clientName + ": " + message);
+
+				appendColoredStatus(clientName + ": " + message, Color.RED);
 				messageField.setText("");
 			} catch (Exception e) {
 				appendStatus("Failed to send message: " + e.getMessage());
@@ -425,6 +456,9 @@ public class MidiJamClient extends JFrame {
 			handleTextMessage(message);
 		} else if (message.startsWith("MIDI:")) {
 			handleMidiMessage(message);
+		} else if (message.startsWith("COUNT:")) {
+			int count = Integer.parseInt(message.substring(6));
+			updateSessionLabel(count);
 		} else {
 			appendStatus("Unknown message type: " + message);
 		}
@@ -433,12 +467,39 @@ public class MidiJamClient extends JFrame {
 	private void handleTextMessage(String message) {
 		String[] parts = message.split(":", 4);
 		if (parts.length == 4) {
+			int otherClientId = Integer.parseInt(parts[1]);
 			String otherClientName = parts[2];
 			String actualMessage = parts[3];
-			appendStatus(otherClientName + ": " + actualMessage);
+			Color clientColor = getColorForClientId(otherClientId);
+
+			appendColoredStatus(otherClientName + ": " + actualMessage, clientColor);
 		} else {
 			appendStatus("Invalid TEXT message format.");
 		}
+	}
+
+	private void appendColoredStatus(String message, Color color) {
+		SwingUtilities.invokeLater(() -> {
+			StyledDocument doc = statusArea.getStyledDocument();
+			Style style = statusArea.addStyle("ClientNameStyle", null);
+
+			StyleConstants.setForeground(style, color);
+			StyleConstants.setFontSize(style, 16);
+			try {
+				int colonIndex = message.indexOf(": ");
+				if (colonIndex != -1) {
+					doc.insertString(doc.getLength(), message.substring(0, colonIndex + 1), style);
+					StyleConstants.setForeground(style, Color.WHITE); // Default color
+					doc.insertString(doc.getLength(), message.substring(colonIndex + 1) + "\n", style);
+				} else {
+					doc.insertString(doc.getLength(), message + "\n", style);
+				}
+			} catch (BadLocationException e) {
+				e.printStackTrace();
+			}
+
+			statusArea.setCaretPosition(doc.getLength());
+		});
 	}
 
 	private void handleMidiMessage(String message) {
@@ -465,11 +526,24 @@ public class MidiJamClient extends JFrame {
 			clientSocket.close();
 			appendStatus("Disconnected from server.");
 			tglConnect.setText("Connect");
+			lb_inSessionCount.setText("In Session: ?");
 		}
 	}
 
 	private static void appendStatus(String message) {
-		SwingUtilities.invokeLater(() -> statusArea.append(message + "\n"));
+		SwingUtilities.invokeLater(() -> {
+			try {
+				StyledDocument doc = statusArea.getStyledDocument();
+				Style style = statusArea.addStyle("DefaultStyle", null);
+				StyleConstants.setForeground(style, Color.WHITE);
+
+				doc.insertString(doc.getLength(), message + "\n", style);
+
+				statusArea.setCaretPosition(doc.getLength());
+			} catch (BadLocationException e) {
+				e.printStackTrace();
+			}
+		});
 	}
 
 	static class MultiOutputReceiver implements Receiver {
