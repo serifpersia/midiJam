@@ -35,7 +35,7 @@
 					<archive>
 						<manifest>
 							<mainClass>
-								midiJam.MidiJam</mainClass>
+								midiJam.MidiJamClient</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
