@@ -6,10 +6,10 @@ import javax.swing.*;
 import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 
 @SuppressWarnings("serial")
@@ -19,8 +19,6 @@ public class MidiJamServer extends JFrame {
 
 	private DatagramSocket serverSocket;
 	private Thread serverThread;
-
-	private Random random = new Random();
 
 	private Set<Integer> assignedIds = new HashSet<>();
 	private Map<Integer, ClientInfo> connectedClients;
@@ -80,90 +78,88 @@ public class MidiJamServer extends JFrame {
 	private void startServer() {
 		try {
 			serverSocket = new DatagramSocket(5000);
-			String serverInfo = "Server running at IP: " + InetAddress.getLocalHost().getHostAddress() + ", Port: "
-					+ serverSocket.getLocalPort();
-			appendStatus(serverInfo);
+			appendStatus("Server running at IP: " + InetAddress.getLocalHost().getHostAddress() + ", Port: "
+					+ serverSocket.getLocalPort());
+			startServerThread();
+		} catch (Exception e) {
+			appendStatus("Failed to start server: " + e.getMessage());
+		}
+	}
 
-			serverThread = new Thread(() -> {
-				byte[] buffer = new byte[1024];
-				while (!serverSocket.isClosed()) {
-					try {
-						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-						serverSocket.receive(packet);
-						String message = new String(packet.getData(), 0, packet.getLength()).trim();
-						InetAddress clientAddress = packet.getAddress();
-						int clientPort = packet.getPort();
+	private void startServerThread() {
+		serverThread = new Thread(() -> {
+			byte[] buffer = new byte[1024];
+			while (!serverSocket.isClosed()) {
+				handleClientRequest(buffer);
+			}
+		});
+		serverThread.start();
+	}
 
-						if (message.startsWith("CONNECT:")) {
-							int clientId = assignClientId();
-							connectedClients.put(clientId, new ClientInfo(clientId, clientAddress, clientPort));
-							appendStatus("Client: " + clientId + " connected");
+	private void handleClientRequest(byte[] buffer) {
+		try {
+			DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+			serverSocket.receive(packet);
+			String message = new String(packet.getData(), 0, packet.getLength()).trim();
+			InetAddress clientAddress = packet.getAddress();
+			int clientPort = packet.getPort();
 
-							String idMessage = "ID:" + clientId;
-							DatagramPacket idPacket = new DatagramPacket(idMessage.getBytes(), idMessage.length(),
-									clientAddress, clientPort);
-							serverSocket.send(idPacket);
-						} else if (message.startsWith("DISCONNECT:")) {
-							int clientId = Integer.parseInt(message.substring(11));
-							connectedClients.remove(clientId);
-							appendStatus("Client: " + clientId + " disconnected");
-						} else if (message.startsWith("TEXT:")) {
+			if (message.startsWith("CONNECT:")) {
+				handleConnectMessage(clientAddress, clientPort);
+			} else if (message.startsWith("DISCONNECT:")) {
+				handleDisconnectMessage(message);
+			} else if (message.startsWith("TEXT:") || message.startsWith("MIDI:")) {
+				handleTextOrMidiMessage(message);
+			} else {
+				appendStatus("Unknown message type: " + message);
+			}
+		} catch (Exception e) {
+			if (!serverSocket.isClosed()) {
+				appendStatus("Error: " + e.getMessage());
+			}
+		}
+	}
 
-							String[] parts = message.split(":", 4);
+	private void handleConnectMessage(InetAddress clientAddress, int clientPort) throws IOException {
+		int clientId = assignClientId();
+		connectedClients.put(clientId, new ClientInfo(clientId, clientAddress, clientPort));
+		appendStatus("Client: " + clientId + " connected");
 
-							if (parts.length == 4) {
-								int clientId = Integer.parseInt(parts[1]);
-								String clientName = parts[2];
-								String actualMessage = parts[3];
+		String idMessage = "ID:" + clientId;
+		DatagramPacket idPacket = new DatagramPacket(idMessage.getBytes(), idMessage.length(), clientAddress,
+				clientPort);
+		serverSocket.send(idPacket);
+	}
 
-								appendStatus("Client " + clientName + ": " + actualMessage);
+	private void handleDisconnectMessage(String message) {
+		int clientId = Integer.parseInt(message.substring(11));
+		connectedClients.remove(clientId);
+		appendStatus("Client: " + clientId + " disconnected");
+	}
 
-								forwardMessageToClients("TEXT:" + clientId + ":" + clientName + ":" + actualMessage,
-										clientId);
-							}
-						} else if (message.startsWith("MIDI:")) {
-							String[] parts = message.split(":", 4);
-							if (parts.length == 4) {
-								int clientId = Integer.parseInt(parts[1]);
-								String clientName = parts[2];
-								String actualMessage = parts[3];
-
-								appendStatus("Client " + clientName + ": " + actualMessage);
-								forwardMessageToClients("MIDI:" + clientId + ":" + clientName + ":" + actualMessage,
-										clientId);
-							}
-
-						} else {
-							appendStatus("Unknown message type: " + message);
-						}
-
-					} catch (Exception e) {
-						if (!serverSocket.isClosed()) {
-							appendStatus("Error: " + e.getMessage());
-						}
-					}
-				}
-			});
-			serverThread.start();
-		} catch (
-
-		Exception e) {
-			System.out.println("Failed to start server: " + e.getMessage());
+	private void handleTextOrMidiMessage(String message) {
+		String[] parts = message.split(":", 4);
+		if (parts.length == 4) {
+			int clientId = Integer.parseInt(parts[1]);
+			String clientName = parts[2];
+			String actualMessage = parts[3];
+			appendStatus("Client " + clientName + ": " + actualMessage);
+			forwardMessageToClients(message, clientId);
 		}
 	}
 
 	private void forwardMessageToClients(String message, int senderClientId) {
-		for (ClientInfo client : connectedClients.values()) {
-			if (client.getId() != senderClientId) {
-				try {
-					byte[] buffer = message.getBytes();
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client.getAddress(),
-							client.getPort());
-					serverSocket.send(packet);
-				} catch (Exception e) {
-					System.out.println("Failed to forward message to ID: " + client.getId() + ": " + e.getMessage());
-				}
-			}
+		connectedClients.values().stream().filter(client -> client.getId() != senderClientId)
+				.forEach(client -> sendPacketToClient(message, client));
+	}
+
+	private void sendPacketToClient(String message, ClientInfo client) {
+		try {
+			byte[] buffer = message.getBytes();
+			DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client.getAddress(), client.getPort());
+			serverSocket.send(packet);
+		} catch (Exception e) {
+			appendStatus("Failed to forward message to ID: " + client.getId() + ": " + e.getMessage());
 		}
 	}
 
@@ -179,12 +175,13 @@ public class MidiJamServer extends JFrame {
 	}
 
 	private int assignClientId() {
-		int id;
-		do {
-			id = random.nextInt(MAX_ID);
-		} while (assignedIds.contains(id));
-		assignedIds.add(id);
-		return id;
+		for (int id = 0; id < MAX_ID; id++) {
+			if (!assignedIds.contains(id)) {
+				assignedIds.add(id);
+				return id;
+			}
+		}
+		throw new RuntimeException("All client IDs are in use.");
 	}
 
 	private class ClientInfo {

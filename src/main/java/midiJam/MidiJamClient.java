@@ -9,6 +9,7 @@ import javax.swing.*;
 import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiDevice;
@@ -216,7 +217,7 @@ public class MidiJamClient extends JFrame {
 
 		midi_ch_list_dropdown = new JComboBox<Object>();
 
-		for (int i = 0; i <= 15; i++) {
+		for (int i = 0; i < 16; i++) {
 			midi_ch_list_dropdown.addItem("CH" + String.format("%02d", i + 1));
 		}
 
@@ -268,53 +269,86 @@ public class MidiJamClient extends JFrame {
 	private void startClient() {
 		try {
 			clientSocket = new DatagramSocket();
+			ClientSetup clientSetup = promptClientSetup();
 
-			JPanel panel = new JPanel(new GridLayout(0, 1));
-			JTextField nameField = new JTextField();
-			JTextField ipField = new JTextField("127.0.0.1:5000");
-			panel.add(new JLabel("Enter your name:"));
-			panel.add(nameField);
-			panel.add(new JLabel("Enter server IP:Port:"));
-			panel.add(ipField);
+			if (clientSetup != null) {
+				serverAddress = clientSetup.serverAddress;
+				serverPort = clientSetup.serverPort;
+				clientName = clientSetup.clientName;
 
-			int result = JOptionPane.showConfirmDialog(this, panel, "Client Setup", JOptionPane.OK_CANCEL_OPTION,
-					JOptionPane.PLAIN_MESSAGE);
-			if (result == JOptionPane.OK_OPTION) {
-				clientName = nameField.getText().trim();
-				String[] serverDetails = ipField.getText().trim().split(":");
-				serverAddress = InetAddress.getByName(serverDetails[0]);
-				serverPort = Integer.parseInt(serverDetails[1]);
-
-				String connectMessage = "CONNECT:" + clientName;
-				sendPacket(connectMessage.getBytes());
-
-				byte[] buffer = new byte[1024];
-				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-				clientSocket.setSoTimeout(2000);
-				try {
-					clientSocket.receive(packet);
-					String idMessage = new String(packet.getData(), 0, packet.getLength());
-					if (idMessage.startsWith("ID:")) {
-						clientId = Integer.parseInt(idMessage.substring(3));
-						appendStatus("Connected to server with ID: " + clientId);
-						tglConnect.setText("Disconnect");
-
-						startMidiRouting();
-						receiveMessages();
-					} else {
-						showErrorDialog("Failed to receive ID from server.");
-						tglConnect.setSelected(false);
-					}
-				} catch (SocketTimeoutException ste) {
-					showErrorDialog("Connection to server timed out. Please try again.");
-					tglConnect.setSelected(false);
-				}
+				connectToServer();
 			} else {
 				tglConnect.setSelected(false);
 			}
 		} catch (Exception e) {
 			showErrorDialog("Failed to connect to server: " + e.getMessage());
 			tglConnect.setSelected(false);
+		}
+	}
+
+	private ClientSetup promptClientSetup() {
+		JPanel panel = new JPanel(new GridLayout(0, 1));
+		JTextField nameField = new JTextField();
+		JTextField ipField = new JTextField("127.0.0.1:5000");
+
+		panel.add(new JLabel("Enter your name:"));
+		panel.add(nameField);
+		panel.add(new JLabel("Enter server IP:Port:"));
+		panel.add(ipField);
+
+		int result = JOptionPane.showConfirmDialog(this, panel, "Client Setup", JOptionPane.OK_CANCEL_OPTION,
+				JOptionPane.PLAIN_MESSAGE);
+
+		if (result == JOptionPane.OK_OPTION) {
+			try {
+				String[] serverDetails = ipField.getText().trim().split(":");
+				return new ClientSetup(nameField.getText().trim(), InetAddress.getByName(serverDetails[0]),
+						Integer.parseInt(serverDetails[1]));
+			} catch (Exception e) {
+				showErrorDialog("Invalid IP or Port.");
+			}
+		}
+		return null;
+	}
+
+	private void connectToServer() throws IOException {
+		String connectMessage = "CONNECT:" + clientName;
+		sendPacket(connectMessage.getBytes());
+
+		byte[] buffer = new byte[1024];
+		DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+		clientSocket.setSoTimeout(2000);
+
+		try {
+			clientSocket.receive(packet);
+			String idMessage = new String(packet.getData(), 0, packet.getLength());
+
+			if (idMessage.startsWith("ID:")) {
+				clientId = Integer.parseInt(idMessage.substring(3));
+				appendStatus("Connected to server with ID: " + clientId);
+				tglConnect.setText("Disconnect");
+
+				startMidiRouting();
+				receiveMessages();
+			} else {
+				showErrorDialog("Failed to receive ID from server.");
+				tglConnect.setSelected(false);
+			}
+		} catch (SocketTimeoutException ste) {
+			showErrorDialog("Connection to server timed out. Please try again.");
+			tglConnect.setSelected(false);
+		}
+	}
+
+	private static class ClientSetup {
+		String clientName;
+		InetAddress serverAddress;
+		int serverPort;
+
+		ClientSetup(String clientName, InetAddress serverAddress, int serverPort) {
+			this.clientName = clientName;
+			this.serverAddress = serverAddress;
+			this.serverPort = serverPort;
 		}
 	}
 
@@ -333,6 +367,23 @@ public class MidiJamClient extends JFrame {
 			} catch (Exception e) {
 				appendStatus("Failed to send message: " + e.getMessage());
 			}
+		}
+	}
+
+	private byte[] parseMidiData(String message) {
+		String[] parts = message.split(":");
+		byte[] midiData = new byte[parts.length - 2];
+		for (int i = 2; i < parts.length; i++) {
+			midiData[i - 2] = Byte.parseByte(parts[i]);
+		}
+		return midiData;
+	}
+
+	private void sendToMidiDevice(byte[] midiData) {
+		try {
+			midiReceiver.send(new ShortMessage(midiData[0] & 0xFF, midiData[1] & 0xFF, midiData[2] & 0xFF), -1);
+		} catch (InvalidMidiDataException e) {
+			appendStatus("Error sending MIDI data: " + e.getMessage());
 		}
 	}
 
@@ -362,61 +413,37 @@ public class MidiJamClient extends JFrame {
 				try {
 					clientSocket.receive(packet);
 					String message = new String(packet.getData(), 0, packet.getLength()).trim();
-
-					if (message.startsWith("TEXT:")) {
-						String[] parts = message.split(":", 4);
-						if (parts.length == 4) {
-							String otherClientName = parts[2];
-							String actualMessage = parts[3];
-							String formattedMessage = otherClientName + ": " + actualMessage;
-							SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
-						} else {
-							SwingUtilities.invokeLater(() -> appendStatus("Invalid TEXT message format."));
-						}
-					} else if (message.startsWith("MIDI:")) {
-						String[] parts = message.split(":");
-						if (parts.length == 7) {
-							// String senderName = parts[2];
-							int status = Integer.parseInt(parts[3]);
-							int channel = Integer.parseInt(parts[4]);
-							int data1 = Integer.parseInt(parts[5]);
-							int data2 = Integer.parseInt(parts[6]);
-
-							// String formattedMessage = "MIDI from " + senderName + ": " + ", Status=" +
-							// status
-							// + ", Channel=" + channel + ", Data1=" + data1 + ", Data2=" + data2;
-							// SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
-							routeNetworkMIDI(status, channel, data1, data2);
-						} else {
-							SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI message format."));
-						}
-					} else {
-						SwingUtilities.invokeLater(() -> appendStatus("Unknown message type: "));
-					}
-				} catch (SocketTimeoutException e) {
+					handleReceivedMessage(message);
 				} catch (Exception e) {
-					if (!clientSocket.isClosed()) {
-						SwingUtilities.invokeLater(() -> appendStatus("Failed to receive message: " + e.getMessage()));
-					}
 				}
 			}
 		}).start();
 	}
 
-	private void routeNetworkMIDI(int status, int channel, int data1, int data2) {
-		try {
-			ShortMessage shortMessage = new ShortMessage();
-			shortMessage.setMessage(status, channel, data1, data2);
-
-			if (outputDevice != null && outputDevice.isOpen()) {
-				Receiver receiver = outputDevice.getReceiver();
-				receiver.send(shortMessage, -1);
-			}
-		} catch (InvalidMidiDataException e) {
-
-		} catch (MidiUnavailableException e) {
-
+	private void handleReceivedMessage(String message) {
+		if (message.startsWith("TEXT:")) {
+			handleTextMessage(message);
+		} else if (message.startsWith("MIDI:")) {
+			handleMidiMessage(message);
+		} else {
+			appendStatus("Unknown message type: " + message);
 		}
+	}
+
+	private void handleTextMessage(String message) {
+		String[] parts = message.split(":", 4);
+		if (parts.length == 4) {
+			String otherClientName = parts[2];
+			String actualMessage = parts[3];
+			appendStatus(otherClientName + ": " + actualMessage);
+		} else {
+			appendStatus("Invalid TEXT message format.");
+		}
+	}
+
+	private void handleMidiMessage(String message) {
+		byte[] midiData = parseMidiData(message);
+		sendToMidiDevice(midiData);
 	}
 
 	private static void sendPacket(byte[] data) {
