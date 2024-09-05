@@ -54,8 +54,11 @@ public class MidiJamClient extends JFrame {
 	private JButton sendButton;
 
 	private JLabel lb_inSessionCount;
+	private JLabel activeSenderlb;
 
 	public static ChordPanel chordPanelInstance;
+
+	public static StatusIndicatorPanel statusIndicatorPanel;
 
 	private static final Color[] CHAT_COLORS = { new Color(0, 191, 255), new Color(50, 205, 50), new Color(255, 140, 0),
 			new Color(255, 105, 180), new Color(255, 215, 0), new Color(0, 255, 255), new Color(148, 0, 211),
@@ -176,8 +179,22 @@ public class MidiJamClient extends JFrame {
 	private void initComponents() {
 		getContentPane().setLayout(new BorderLayout());
 
+		JPanel rootTop_Panel = new JPanel();
+		getContentPane().add(rootTop_Panel, BorderLayout.NORTH);
+		rootTop_Panel.setLayout(new BorderLayout(0, 0));
+
+		statusIndicatorPanel = new StatusIndicatorPanel();
+		rootTop_Panel.add(statusIndicatorPanel, BorderLayout.EAST);
+
+		activeSenderlb = new JLabel("Active Client: None");
+		activeSenderlb.setHorizontalAlignment(SwingConstants.CENTER);
+		rootTop_Panel.add(activeSenderlb, BorderLayout.CENTER);
+
+		JPanel rootCenter_Panel = new JPanel();
+		getContentPane().add(rootCenter_Panel, BorderLayout.CENTER);
+		rootCenter_Panel.setLayout(new BorderLayout(0, 0));
+
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
-		getContentPane().add(tabbedPane, BorderLayout.CENTER);
 
 		JPanel connectPanel = createConnectPanel();
 		tabbedPane.addTab("Connect", null, connectPanel, null);
@@ -204,6 +221,8 @@ public class MidiJamClient extends JFrame {
 				}
 			}
 		});
+
+		rootCenter_Panel.add(tabbedPane, BorderLayout.CENTER);
 	}
 
 	private JPanel createConnectPanel() {
@@ -381,6 +400,7 @@ public class MidiJamClient extends JFrame {
 
 				startMidiRouting();
 				receiveMessages();
+				statusIndicatorPanel.setConnected(true);
 			} else {
 				showErrorDialog("Failed to receive ID from server.");
 				tglConnect.setSelected(false);
@@ -494,7 +514,7 @@ public class MidiJamClient extends JFrame {
 	}
 
 	private void handleChordKeys(String message) {
-		appendStatus(message);
+		// appendStatus(message);
 
 		String[] parts = message.split(":", 6);
 		if (parts.length == 6) {
@@ -513,7 +533,7 @@ public class MidiJamClient extends JFrame {
 				}
 			});
 		} else {
-			appendStatus("Invalid CHORD_KEYS message format.");
+			// appendStatus("Invalid CHORD_KEYS message format.");
 		}
 	}
 
@@ -533,13 +553,16 @@ public class MidiJamClient extends JFrame {
 				return;
 			}
 
-			String formattedMessage = String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d",
-					senderName, status, channel, data1, data2);
-			SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
-
+			// String formattedMessage = String.format("MIDI from %s: Status=%d, Channel=%d,
+			// Data1=%d, Data2=%d",
+			// senderName, status, channel, data1, data2);
+			// SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
+			SwingUtilities.invokeLater(() -> activeSenderlb.setText("Active Client: " + senderName));
+			statusIndicatorPanel.setActive(true);
 			sendToMidiDevice(status, channel, data1, data2);
 		} else {
-			SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI message format."));
+			// SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI message
+			// format."));
 		}
 	}
 
@@ -626,6 +649,7 @@ public class MidiJamClient extends JFrame {
 			sendPacket(disconnectMessage.getBytes());
 
 			clientSocket.close();
+			statusIndicatorPanel.setConnected(false);
 			appendStatus("Disconnected from server.");
 			tglConnect.setText("Connect");
 		}
