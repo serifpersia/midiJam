@@ -42,6 +42,7 @@ public class MidiJamServer extends JFrame {
 		setSize(300, 200);
 		setTitle("MidiJam Server");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
+		setResizable(false);
 
 		connectedClients = new HashMap<>();
 
@@ -75,9 +76,30 @@ public class MidiJamServer extends JFrame {
 		chatPanel.add(statusScrollPane, BorderLayout.CENTER);
 	}
 
-	private void startServer() {
+	private int promptForPort() {
+		int defaultPort = 5000;
+
+		String portStr = JOptionPane.showInputDialog(this, "Enter UDP port (default is 5000):", defaultPort);
+
+		if (portStr == null) {
+			System.exit(0);
+		}
+
 		try {
-			serverSocket = new DatagramSocket(5000);
+			return Integer.parseInt(portStr);
+		} catch (NumberFormatException e) {
+			JOptionPane.showMessageDialog(this, "Invalid port number. Please enter a valid integer.", "Error",
+					JOptionPane.ERROR_MESSAGE);
+			System.exit(1);
+		}
+
+		return defaultPort;
+	}
+
+	private void startServer() {
+		int port = promptForPort();
+		try {
+			serverSocket = new DatagramSocket(port);
 			appendStatus("Server running at IP: " + InetAddress.getLocalHost().getHostAddress() + ", Port: "
 					+ serverSocket.getLocalPort());
 			startServerThread();
@@ -108,8 +130,12 @@ public class MidiJamServer extends JFrame {
 				handleConnectMessage(clientAddress, clientPort);
 			} else if (message.startsWith("DISCONNECT:")) {
 				handleDisconnectMessage(message);
-			} else if (message.startsWith("TEXT:") || message.startsWith("MIDI:")) {
-				handleTextOrMidiMessage(message);
+			} else if (message.startsWith("TEXT:")) {
+				handleTextMessage(message);
+			} else if (message.startsWith("MIDI:")) {
+				handleMidiMessage(message);
+			} else if (message.startsWith("CHORD_KEYS:")) {
+				handleChordKeysMessage(message);
 			} else {
 				appendStatus("Unknown message type: " + message);
 			}
@@ -141,14 +167,62 @@ public class MidiJamServer extends JFrame {
 		broadcastClientCount();
 	}
 
-	private void handleTextOrMidiMessage(String message) {
+	private void handleChordKeysMessage(String message) {
+		String[] parts = message.split(":", 6);
+		if (parts.length == 6) {
+			int clientId = Integer.parseInt(parts[1]);
+			String clientName = parts[2];
+			int note = Integer.parseInt(parts[3]);
+			boolean isNoteOn = Boolean.parseBoolean(parts[4]);
+			String chordName = parts[5];
+
+			appendStatus(String.format("CHORD_KEYS from %s (ID: %d): Note=%d, isNoteOn=%b, Chord=%s", clientName,
+					clientId, note, isNoteOn, chordName));
+
+			forwardMessageToClients(message, clientId);
+		} else {
+			appendStatus("Invalid CHORD_KEYS message format.");
+		}
+	}
+
+	private void handleTextMessage(String message) {
 		String[] parts = message.split(":", 4);
 		if (parts.length == 4) {
 			int clientId = Integer.parseInt(parts[1]);
 			String clientName = parts[2];
 			String actualMessage = parts[3];
-			appendStatus("Client " + clientName + ": " + actualMessage);
+
+			appendStatus("TEXT Message from " + clientName + ": " + actualMessage);
+
+			forwardMessageToClients("TEXT:" + clientId + ":" + clientName + ":" + actualMessage, clientId);
+		} else {
+			appendStatus("Invalid TEXT message format.");
+		}
+	}
+
+	private void handleMidiMessage(String message) {
+		String[] parts = message.split(":");
+		if (parts.length == 7) {
+			int clientId = Integer.parseInt(parts[1]);
+			String clientName = parts[2];
+			int status, channel, data1, data2;
+
+			try {
+				status = Integer.parseInt(parts[3]);
+				channel = Integer.parseInt(parts[4]);
+				data1 = Integer.parseInt(parts[5]);
+				data2 = Integer.parseInt(parts[6]);
+			} catch (NumberFormatException e) {
+				appendStatus("Error parsing MIDI data from client " + clientName + ": " + e.getMessage());
+				return;
+			}
+
+			appendStatus(String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d", clientName, status,
+					channel, data1, data2));
+
 			forwardMessageToClients(message, clientId);
+		} else {
+			appendStatus("Invalid MIDI message format.");
 		}
 	}
 
