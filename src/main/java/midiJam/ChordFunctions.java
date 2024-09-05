@@ -57,7 +57,7 @@ public class ChordFunctions {
 	public static List<Integer> getAsStackedChord(List<Integer> chord, boolean reduce) {
 		List<Integer> temp = new ArrayList<>(chord);
 		if (reduce) {
-			temp = new ArrayList<>(new HashSet<>(temp)); // Remove duplicates
+			temp = new ArrayList<>(new HashSet<>(temp));
 		}
 		Collections.sort(temp);
 
@@ -116,7 +116,7 @@ public class ChordFunctions {
 	}
 
 	public static String getIntervalName(int semitones) {
-		semitones %= 12; // Simplify to within one octave
+		semitones %= 12;
 		switch (semitones) {
 		case 0:
 			return "Unison";
@@ -169,7 +169,7 @@ public class ChordFunctions {
 		public ChordName(String chordName, String noteString) {
 			this.name = chordName;
 			this.pattern = getIntervalString(noteString);
-			this.rootIndex = 0; // Default root index
+			this.rootIndex = 0;
 		}
 
 		public static List<ChordName> getChordNames() {
@@ -244,7 +244,6 @@ public class ChordFunctions {
 
 	public static void updateChordName(String name) {
 		detectedChord = name;
-		// Notify listeners or trigger a callback here
 	}
 
 	public static void addNoteToActiveList(int note) {

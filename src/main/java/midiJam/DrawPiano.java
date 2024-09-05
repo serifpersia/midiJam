@@ -12,8 +12,7 @@ import javax.swing.JPanel;
 
 @SuppressWarnings("serial")
 public class DrawPiano extends JPanel {
-	public final static Map<Integer, Double> blackKeyOffset = Map.of(1, -0.7, 3, -0.5, 6, -0.5, 8, -0.5, 10, -0.5); // starts
-																													// with
+	public final static Map<Integer, Double> blackKeyOffset = Map.of(1, -0.7, 3, -0.5, 6, -0.5, 8, -0.5, 10, -0.5);
 
 	private static int leftMinPitch = 21;
 	private static int rightMaxPitch = 108;
@@ -92,7 +91,6 @@ public class DrawPiano extends JPanel {
 
 		int currentX = getStartX();
 
-		// Draw white keys
 		for (int i = 0; i < NUM_KEYS; i++) {
 			int pitch = i + FIRST_KEY_PITCH_OFFSET;
 
@@ -116,10 +114,8 @@ public class DrawPiano extends JPanel {
 			}
 		}
 
-		// Reset currentX for drawing black keys
 		currentX = getStartX();
 
-		// Draw black keys
 		for (int i = 0; i < NUM_KEYS; i++) {
 			int pitch = i + FIRST_KEY_PITCH_OFFSET;
 
@@ -147,8 +143,6 @@ public class DrawPiano extends JPanel {
 				currentX += whiteKeyWidth;
 			}
 		}
-
-		// Highlight Piano Size
 	}
 
 	private int getStartX() {
@@ -177,7 +171,6 @@ public class DrawPiano extends JPanel {
 		if (w / h > pianoWidthToHeightRatio) {
 			w = (int) (h * pianoWidthToHeightRatio);
 		}
-		// taking into account rounding
 		return w / NUM_WHITE_KEYS * NUM_WHITE_KEYS;
 	}
 
@@ -192,7 +185,7 @@ public class DrawPiano extends JPanel {
 				return i;
 			}
 		}
-		return -1; // No key found
+		return -1;
 	}
 
 	public float getKeyXPos(int pitch) {

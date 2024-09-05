@@ -55,8 +55,6 @@ public class MidiJamClient extends JFrame {
 
 	private JLabel lb_inSessionCount;
 
-	public static String chordName;
-
 	public static ChordPanel chordPanelInstance;
 
 	private static final Color[] CHAT_COLORS = { new Color(0, 191, 255), new Color(50, 205, 50), new Color(255, 140, 0),
@@ -78,7 +76,7 @@ public class MidiJamClient extends JFrame {
 		Color color;
 		do {
 			color = CHAT_COLORS[random.nextInt(CHAT_COLORS.length)];
-		} while (color.equals(Color.RED)); // Avoid red
+		} while (color.equals(Color.RED));
 		return color;
 	}
 
@@ -99,6 +97,7 @@ public class MidiJamClient extends JFrame {
 		setSize(350, 450);
 		setTitle("MidiJam Client");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
+		setResizable(false);
 
 		initMidi();
 		initComponents();
@@ -116,7 +115,6 @@ public class MidiJamClient extends JFrame {
 		if (inputDevice == null || outputDevice == null) {
 			MidiDevice.Info inputDeviceInfo = (MidiDevice.Info) inputDeviceDropdown.getSelectedItem();
 			MidiDevice.Info outputDeviceInfo = (MidiDevice.Info) outputDeviceDropdown.getSelectedItem();
-			;
 
 			try {
 				inputDevice = MidiSystem.getMidiDevice(inputDeviceInfo);
@@ -125,10 +123,7 @@ public class MidiJamClient extends JFrame {
 				inputDevice.open();
 				outputDevice.open();
 
-				List<Receiver> receivers = new ArrayList<>();
-				receivers.add(outputDevice.getReceiver());
-
-				midiReceiver.setDelegates(receivers);
+				midiReceiver.setReceiver(outputDevice.getReceiver());
 				inputDevice.getTransmitter().setReceiver(midiReceiver);
 
 				System.out.println("MIDI Routing started.");
@@ -232,7 +227,6 @@ public class MidiJamClient extends JFrame {
 				startClient();
 			} else {
 				closeClient();
-//				chordPanelInstance = null;
 			}
 		});
 		connectBtnPanel.add(tglConnect, BorderLayout.CENTER);
@@ -342,7 +336,7 @@ public class MidiJamClient extends JFrame {
 	private ClientSetup promptClientSetup() {
 		JPanel panel = new JPanel(new GridLayout(0, 1));
 		JTextField nameField = new JTextField();
-		JTextField ipField = new JTextField("127.0.0.1:25565");
+		JTextField ipField = new JTextField("127.0.0.1:5000");
 
 		panel.add(new JLabel("Enter your name:"));
 		panel.add(nameField);
@@ -415,92 +409,57 @@ public class MidiJamClient extends JFrame {
 
 	private void sendMessage() {
 		String message = messageField.getText().trim();
-		if (!message.isEmpty() && clientSocket != null && !clientSocket.isClosed()) {
-			try {
-				String fullMessage = "TEXT:" + clientId + ":" + clientName + ":" + message;
-				sendPacket(fullMessage.getBytes());
+		if (message.isEmpty()) {
+			return;
+		}
 
-				appendColoredStatus(clientName + ": " + message, Color.RED);
+		if (clientSocket == null || clientSocket.isClosed()) {
+			appendStatus("Client socket is not available.");
+			return;
+		}
+
+		String fullMessage = String.format("TEXT:%s:%s:%s", clientId, clientName, message);
+		try {
+			sendPacket(fullMessage.getBytes());
+
+			SwingUtilities.invokeLater(() -> {
+				appendColoredStatus(String.format("%s: %s", clientName, message), Color.RED);
 				messageField.setText("");
-			} catch (Exception e) {
-				appendStatus("Failed to send message: " + e.getMessage());
-			}
+			});
+		} catch (Exception e) {
+			SwingUtilities.invokeLater(() -> appendStatus("Failed to send message: " + e.getMessage()));
 		}
 	}
 
-	private byte[] parseMidiData(String message) {
-		String[] parts = message.split(":");
-
-		// Ensure that there are enough parts in the message
-		if (parts.length < 6) { // Adjust this based on your minimum expected format
-			appendStatus("Invalid message format: " + message);
-			return new byte[0]; // Return an empty byte array if format is invalid
+	public static void sendMIDI(MidiMessage message) {
+		if (!(message instanceof ShortMessage)) {
+			System.err.println("Unsupported MIDI message type.");
+			return;
 		}
 
-		// Extract clientName (which is at index 2)
-		String remoteClientName = parts[2];
+		ShortMessage shortMessage = (ShortMessage) message;
+		int status = shortMessage.getCommand();
+		int channel = shortMessage.getChannel();
+		int data1 = shortMessage.getData1();
+		int data2 = shortMessage.getData2();
 
-		// Extract chordName (which is the last part of the message)
-		String chordName = parts[parts.length - 1];
+		String midiMessageString = String.format("MIDI:%s:%s:%d:%d:%d:%d", clientId, clientName, status, channel, data1,
+				data2);
 
-		// Prepare MIDI data (excluding clientId, clientName, and chordName)
-		byte[] midiData = new byte[parts.length - 4]; // Adjust size to exclude clientId, clientName, and chordName
-
-		for (int i = 4; i < parts.length - 1; i++) {
-			midiData[i - 4] = Byte.parseByte(parts[i]);
-		}
-
-		// Log or update status with extracted data
-		// appendStatus("Client Name: " + remoteClientName + ", Chord Name: " +
-		// chordName);
-		SwingUtilities.invokeLater(() -> chordPanelInstance.updateChordLabel(remoteClientName, chordName));
-
-		return midiData;
-	}
-
-	private void sendToMidiDevice(byte[] midiData) {
 		try {
-			ShortMessage sm = new ShortMessage();
-			sm.setMessage(midiData[0] & 0xFF, midiData[1] & 0xFF, midiData[2] & 0xFF);
-			midiReceiver.send(sm, -1);
-
-			int command = sm.getCommand();
-			int note = sm.getData1();
-			int velocity = sm.getData2();
-			boolean isNoteOn = command == ShortMessage.NOTE_ON && velocity > 0;
-			boolean isNoteOff = command == ShortMessage.NOTE_OFF || velocity == 0;
-
-			System.out.println(note);
-			System.out.println(isNoteOn);
-			System.out.println(isNoteOff);
-//			if (isNoteOn) {
-//				SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 1));
-//				System.out.println("uhm idk 1");
-//			} else if (isNoteOff) {
-//
-//				SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 0));
-//				System.out.println("uhm idk 0");
-//			}
-
-		} catch (InvalidMidiDataException e) {
-		}
-	}
-
-	public static void sendMIDI(MidiMessage message, String chordName) {
-		try {
-			if (message instanceof ShortMessage) {
-				ShortMessage shortMessage = (ShortMessage) message;
-				int status = shortMessage.getCommand();
-				int channel = shortMessage.getChannel();
-				int data1 = shortMessage.getData1();
-				int data2 = shortMessage.getData2();
-
-				String midiMessageString = "MIDI:" + clientId + ":" + clientName + ":" + status + ":" + channel + ":"
-						+ data1 + ":" + data2 + ":" + chordName;
-				sendPacket(midiMessageString.getBytes());
-			}
+			sendPacket(midiMessageString.getBytes());
 		} catch (Exception e) {
 			System.err.println("Failed to send MIDI message: " + e.getMessage());
+		}
+	}
+
+	public static void sendChordKeys(int note, boolean isNoteOn, String chordName) {
+		try {
+			String chordKeysMessage = String.format("CHORD_KEYS:%d:%s:%d:%b:%s", clientId, clientName, note, isNoteOn,
+					chordName);
+			sendPacket(chordKeysMessage.getBytes());
+		} catch (Exception e) {
+			System.err.println("Failed to send CHORD_KEYS message: " + e.getMessage());
 		}
 	}
 
@@ -524,7 +483,8 @@ public class MidiJamClient extends JFrame {
 			handleTextMessage(message);
 		} else if (message.startsWith("MIDI:")) {
 			handleMidiMessage(message);
-
+		} else if (message.startsWith("CHORD_KEYS:")) {
+			handleChordKeys(message);
 		} else if (message.startsWith("COUNT:")) {
 			int count = Integer.parseInt(message.substring(6));
 			updateSessionLabel(count);
@@ -533,18 +493,80 @@ public class MidiJamClient extends JFrame {
 		}
 	}
 
+	private void handleChordKeys(String message) {
+		appendStatus(message);
+
+		String[] parts = message.split(":", 6);
+		if (parts.length == 6) {
+			String clientName = parts[2];
+			int pitch = Integer.parseInt(parts[3]);
+			boolean isNoteOn = Boolean.parseBoolean(parts[4]);
+			String chordName = parts[5];
+
+			SwingUtilities.invokeLater(() -> chordPanelInstance.updateChordLabel(clientName, chordName));
+
+			SwingUtilities.invokeLater(() -> {
+				if (isNoteOn) {
+					chordPanelInstance.piano.setPianoKey(pitch, 1);
+				} else {
+					chordPanelInstance.piano.setPianoKey(pitch, 0);
+				}
+			});
+		} else {
+			appendStatus("Invalid CHORD_KEYS message format.");
+		}
+	}
+
+	private void handleMidiMessage(String message) {
+		String[] parts = message.split(":");
+		if (parts.length == 7) {
+			String senderName = parts[2];
+			int status, channel, data1, data2;
+
+			try {
+				status = Integer.parseInt(parts[3]);
+				channel = Integer.parseInt(parts[4]);
+				data1 = Integer.parseInt(parts[5]);
+				data2 = Integer.parseInt(parts[6]);
+			} catch (NumberFormatException e) {
+				SwingUtilities.invokeLater(() -> appendStatus("Error parsing MIDI data."));
+				return;
+			}
+
+			String formattedMessage = String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d",
+					senderName, status, channel, data1, data2);
+			SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
+
+			sendToMidiDevice(status, channel, data1, data2);
+		} else {
+			SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI message format."));
+		}
+	}
+
 	private void handleTextMessage(String message) {
 		String[] parts = message.split(":", 4);
-		if (parts.length == 4) {
-			int otherClientId = Integer.parseInt(parts[1]);
-			String otherClientName = parts[2];
-			String actualMessage = parts[3];
-			Color clientColor = getColorForClientId(otherClientId);
 
-			appendColoredStatus(otherClientName + ": " + actualMessage, clientColor);
-		} else {
+		if (parts.length != 4) {
 			appendStatus("Invalid TEXT message format.");
+			return;
 		}
+
+		int otherClientId;
+		String otherClientName;
+		String actualMessage;
+		Color clientColor;
+
+		try {
+			otherClientId = Integer.parseInt(parts[1]);
+			otherClientName = parts[2];
+			actualMessage = parts[3];
+			clientColor = getColorForClientId(otherClientId);
+		} catch (NumberFormatException e) {
+			appendStatus("Error parsing client ID: " + e.getMessage());
+			return;
+		}
+
+		appendColoredStatus(String.format("%s: %s", otherClientName, actualMessage), clientColor);
 	}
 
 	private void appendColoredStatus(String message, Color color) {
@@ -558,7 +580,7 @@ public class MidiJamClient extends JFrame {
 				int colonIndex = message.indexOf(": ");
 				if (colonIndex != -1) {
 					doc.insertString(doc.getLength(), message.substring(0, colonIndex + 1), style);
-					StyleConstants.setForeground(style, Color.WHITE); // Default color
+					StyleConstants.setForeground(style, Color.WHITE);
 					doc.insertString(doc.getLength(), message.substring(colonIndex + 1) + "\n", style);
 				} else {
 					doc.insertString(doc.getLength(), message + "\n", style);
@@ -571,10 +593,20 @@ public class MidiJamClient extends JFrame {
 		});
 	}
 
-	private void handleMidiMessage(String message) {
-		byte[] midiData = parseMidiData(message);
-		sendToMidiDevice(midiData);
+	private void sendToMidiDevice(int status, int channel, int data1, int data2) {
+		if (outputDevice == null || !outputDevice.isOpen()) {
+			SwingUtilities.invokeLater(() -> appendStatus("MIDI output device not available."));
+			return;
+		}
 
+		try {
+			Receiver receiver = outputDevice.getReceiver();
+			receiver.send(new ShortMessage(status, channel, data1, data2), -1);
+		} catch (InvalidMidiDataException e) {
+			SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI data exception."));
+		} catch (MidiUnavailableException e) {
+			SwingUtilities.invokeLater(() -> appendStatus("MIDI device unavailable."));
+		}
 	}
 
 	private static void sendPacket(byte[] data) {
@@ -596,7 +628,6 @@ public class MidiJamClient extends JFrame {
 			clientSocket.close();
 			appendStatus("Disconnected from server.");
 			tglConnect.setText("Connect");
-			lb_inSessionCount.setText("In Session: ?");
 		}
 	}
 
@@ -654,30 +685,28 @@ public class MidiJamClient extends JFrame {
 
 	static class MidiReceiver implements Receiver {
 
-		private MultiOutputReceiver multiOutputReceiver;
+		private Receiver outputReceiver;
 
-		public MidiReceiver(List<Receiver> outputDelegates) {
-			multiOutputReceiver = new MultiOutputReceiver(outputDelegates);
+		public MidiReceiver(Receiver outputReceiver) {
+			this.outputReceiver = outputReceiver;
 		}
 
-		public void setDelegates(List<Receiver> delegates) {
-			multiOutputReceiver.setDelegates(delegates);
+		public void setReceiver(Receiver receiver) {
+			this.outputReceiver = receiver;
 		}
 
 		@Override
 		public void send(MidiMessage message, long timeStamp) {
 			if (message instanceof ShortMessage) {
 				ShortMessage sm = (ShortMessage) message;
-
 				int command = sm.getCommand();
-				int status = sm.getCommand();
+				int status = command;
 				int data1 = sm.getData1();
 				int data2 = sm.getData2();
 
 				int note = sm.getData1();
-				int velocity = sm.getData2();
-				boolean isNoteOn = sm.getCommand() == ShortMessage.NOTE_ON && velocity > 0;
-				boolean isNoteOff = sm.getCommand() == ShortMessage.NOTE_OFF || velocity == 0;
+				boolean isNoteOn = sm.getCommand() == ShortMessage.NOTE_ON;
+				boolean isNoteOff = sm.getCommand() == ShortMessage.NOTE_OFF;
 
 				if (isNoteOn) {
 					ChordFunctions.addNoteToActiveList(note);
@@ -698,10 +727,10 @@ public class MidiJamClient extends JFrame {
 					try {
 						ShortMessage msg = new ShortMessage();
 						msg.setMessage(status, customChannel, data1, data2);
-						multiOutputReceiver.send(msg, timeStamp);
+						outputReceiver.send(msg, -1);
 
-						sendMIDI(msg, chordName);
-
+						sendMIDI(msg);
+						sendChordKeys(note, isNoteOn, chordName);
 					} catch (InvalidMidiDataException e) {
 						e.printStackTrace();
 					}
@@ -711,7 +740,9 @@ public class MidiJamClient extends JFrame {
 
 		@Override
 		public void close() {
-			multiOutputReceiver.close();
+			if (outputReceiver != null) {
+				outputReceiver.close();
+			}
 		}
 	}
 

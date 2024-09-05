@@ -17,7 +17,7 @@ public class ChordPanel extends JFrame {
 		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		setSize(797, 175);
 		setTitle("Chords");
-
+		setResizable(false);
 		initComponents();
 		setLocationRelativeTo(null);
 	}
