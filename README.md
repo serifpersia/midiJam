@@ -5,6 +5,10 @@
 **midiJam** is a Java-based server and client application designed for hosting and participating in online MIDI jamming sessions. Unlike audio-based jamming, midiJam uses MIDI data, which consists of small packets that can be transmitted efficiently, even with varying network latencies. This allows musicians to collaborate in real-time with minimal delay.
 
 ## Download
+ [![Release](https://img.shields.io/github/release/serifpersia/midiJam.svg?style=flat-square)](https://github.com/serifpersia/midiJam/releases)
+
+## Java Install
+Make sure you have Java JRE/JDK installed any LTS 17 or newer. [Temurin](https://adoptium.net/temurin/releases/) is one of the sources you can get it.
 
 ## How It Works
 
