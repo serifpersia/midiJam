@@ -48,7 +48,7 @@ public class MidiJamServer extends JFrame {
 			EventQueue.invokeLater(() -> {
 				try {
 					UIManager.setLookAndFeel(new FlatDarkLaf());
-					MidiJamServer frame = new MidiJamServer();
+					MidiJamServer frame = new MidiJamServer(false);
 					frame.setVisible(true);
 				} catch (UnsupportedLookAndFeelException e) {
 					e.printStackTrace();
@@ -73,25 +73,28 @@ public class MidiJamServer extends JFrame {
 		this.serverSocket = null;
 	}
 
-	public MidiJamServer() {
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setSize(300, 200);
-		setTitle("midiJam Server v1.0.1");
-		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
-		setResizable(false);
+	public MidiJamServer(boolean useGui) {
+		if (useGui) {
+			setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+			setSize(300, 200);
+			setTitle("midiJam Server v1.0.0");
+			setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
+			setResizable(false);
 
-		connectedClients = new HashMap<>();
+			connectedClients = new HashMap<>();
+			initComponents();
+			setLocationRelativeTo(null);
 
-		initComponents();
-		setLocationRelativeTo(null);
-
-		startServer();
-		addWindowListener(new WindowAdapter() {
-			@Override
-			public void windowClosing(WindowEvent e) {
-				closeServer();
-			}
-		});
+			startServer();
+			addWindowListener(new WindowAdapter() {
+				@Override
+				public void windowClosing(WindowEvent e) {
+					closeServer();
+				}
+			});
+		} else {
+			connectedClients = new HashMap<>();
+		}
 	}
 
 	private void initComponents() {
