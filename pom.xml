@@ -5,7 +5,7 @@
 	<groupId>com.serifpersia.midiJam</groupId>
 	<artifactId>midiJam</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>MIDI Router</name>
+	<name>midiJam</name>
 
 	<dependencies>
 		<dependency>
@@ -22,7 +22,7 @@
 				<artifactId>maven-assembly-plugin</artifactId>
 				<version>3.3.0</version>
 				<executions>
-					<!-- Execution for MidiJamClient -->
+					<!-- Execution for midiJam Client -->
 					<execution>
 						<id>client-jar</id>
 						<phase>package</phase>
@@ -41,7 +41,7 @@
 							<finalName>midiJam-client</finalName>
 						</configuration>
 					</execution>
-					<!-- Execution for MidiJamServer -->
+					<!-- Execution for midiJam Server -->
 					<execution>
 						<id>server-jar</id>
 						<phase>package</phase>
