@@ -31,8 +31,8 @@ Make sure you have Java JRE/JDK installed any LTS 17 or newer. [Temurin](https:/
 - **Loading VSTs**: Each participant should load their preferred VSTs (Virtual Studio Technology plugins) into a DAW (Digital Audio Workstation) that supports multiple MIDI channels.
   
 - **MIDI Routing**:
-- For Windows use [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) to create virtual midi port that will be used as MIDI Out in the client application. Mac users can follow this [tutorial](https://www.youtube.com/watch?v=IcOA8gHDkgI). And Linux users can do it via terminal
-  -DAW or VST that supports layering of patches with different assigned midi channel should use virtual port created and used as MIDI Output in midiJam Client app as MIDI Input instead of midi device(client app will use this hadrdware midi device as MIDI Input).
+- For Windows use [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) to create virtual MIDI port that will be used as MIDI Out in the client application. Mac users can follow this [tutorial](https://www.youtube.com/watch?v=IcOA8gHDkgI). And Linux users can do it via terminal
+  - DAW or VST that supports layering of patches with different assigned MIDI channel should use virtual port created and used as MIDI Output in midiJam Client app as MIDI Input instead of MIDI device(client app will use this hardware MIDI device as MIDI Input).
   - Assign each VST to the correct MIDI channel, as selected in the midiJam client.
   - For the VST/library/patch you want to control, select the MIDI channel you chose in the midiJam client application.
   - To generate audio from other participants' MIDI data, select their assigned MIDI channel in your DAW or VST with layered patches.
