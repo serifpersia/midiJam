@@ -27,23 +27,21 @@ public class MidiJamServer extends JFrame {
 
 	public static void main(String[] args) {
 		boolean nogui = false;
-		int port = 5000; // Default port
+		int port = 5000;
 
-		// Command-line argument parsing
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equals("--nogui")) {
 				nogui = true;
 			} else if (args[i].equals("-port") && i + 1 < args.length) {
 				try {
 					port = Integer.parseInt(args[i + 1]);
-					i++; // Skip next argument since it's the port number
+					i++;
 				} catch (NumberFormatException e) {
 					System.out.println("Invalid port number. Using default port 5000.");
 				}
 			}
 		}
 
-		// If --nogui flag is passed, run in headless mode
 		if (nogui) {
 			new MidiJamServer(port).startServerHeadless(port);
 		} else {
@@ -59,7 +57,6 @@ public class MidiJamServer extends JFrame {
 		}
 	}
 
-	// Headless mode: starts server without prompting for port
 	private void startServerHeadless(int port) {
 		try {
 			serverSocket = new DatagramSocket(port);
@@ -71,10 +68,9 @@ public class MidiJamServer extends JFrame {
 		}
 	}
 
-	// Constructor for headless mode (no GUI)
 	public MidiJamServer(int port) {
 		connectedClients = new HashMap<>();
-		this.serverSocket = null; // We'll initialize it later in headless mode
+		this.serverSocket = null;
 	}
 
 	public MidiJamServer() {
