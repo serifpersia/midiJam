@@ -26,75 +26,36 @@ public class MidiJamServer extends JFrame {
 	private static JTextArea statusArea;
 
 	public static void main(String[] args) {
-		boolean nogui = false;
-		int port = 5000;
-
-		for (int i = 0; i < args.length; i++) {
-			if (args[i].equals("--nogui")) {
-				nogui = true;
-			} else if (args[i].equals("-port") && i + 1 < args.length) {
-				try {
-					port = Integer.parseInt(args[i + 1]);
-					i++;
-				} catch (NumberFormatException e) {
-					System.out.println("Invalid port number. Using default port 5000.");
-				}
+		EventQueue.invokeLater(() -> {
+			try {
+				UIManager.setLookAndFeel(new FlatDarkLaf());
+				MidiJamServer frame = new MidiJamServer();
+				frame.setVisible(true);
+			} catch (UnsupportedLookAndFeelException e) {
+				e.printStackTrace();
 			}
-		}
-
-		if (nogui) {
-			new MidiJamServer(port).startServerHeadless(port);
-		} else {
-			EventQueue.invokeLater(() -> {
-				try {
-					UIManager.setLookAndFeel(new FlatDarkLaf());
-					MidiJamServer frame = new MidiJamServer(false);
-					frame.setVisible(true);
-				} catch (UnsupportedLookAndFeelException e) {
-					e.printStackTrace();
-				}
-			});
-		}
+		});
 	}
 
-	private void startServerHeadless(int port) {
-		try {
-			serverSocket = new DatagramSocket(port);
-			System.out.println("Server running in headless mode at IP: " + InetAddress.getLocalHost().getHostAddress()
-					+ ", Port: " + serverSocket.getLocalPort());
-			startServerThread();
-		} catch (Exception e) {
-			System.err.println("Failed to start server in headless mode: " + e.getMessage());
-		}
-	}
+	public MidiJamServer() {
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setSize(300, 200);
+		setTitle("midiJam Server v1.0.0");
+		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
+		setResizable(false);
 
-	public MidiJamServer(int port) {
 		connectedClients = new HashMap<>();
-		this.serverSocket = null;
-	}
 
-	public MidiJamServer(boolean useGui) {
-		if (useGui) {
-			setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-			setSize(300, 200);
-			setTitle("midiJam Server v1.0.0");
-			setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
-			setResizable(false);
+		initComponents();
+		setLocationRelativeTo(null);
 
-			connectedClients = new HashMap<>();
-			initComponents();
-			setLocationRelativeTo(null);
-
-			startServer();
-			addWindowListener(new WindowAdapter() {
-				@Override
-				public void windowClosing(WindowEvent e) {
-					closeServer();
-				}
-			});
-		} else {
-			connectedClients = new HashMap<>();
-		}
+		startServer();
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				closeServer();
+			}
+		});
 	}
 
 	private void initComponents() {
