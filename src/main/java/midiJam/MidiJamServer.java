@@ -26,15 +26,55 @@ public class MidiJamServer extends JFrame {
 	private static JTextArea statusArea;
 
 	public static void main(String[] args) {
-		EventQueue.invokeLater(() -> {
-			try {
-				UIManager.setLookAndFeel(new FlatDarkLaf());
-				MidiJamServer frame = new MidiJamServer();
-				frame.setVisible(true);
-			} catch (UnsupportedLookAndFeelException e) {
-				e.printStackTrace();
+		boolean nogui = false;
+		int port = 5000; // Default port
+
+		// Command-line argument parsing
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].equals("--nogui")) {
+				nogui = true;
+			} else if (args[i].equals("-port") && i + 1 < args.length) {
+				try {
+					port = Integer.parseInt(args[i + 1]);
+					i++; // Skip next argument since it's the port number
+				} catch (NumberFormatException e) {
+					System.out.println("Invalid port number. Using default port 5000.");
+				}
 			}
-		});
+		}
+
+		// If --nogui flag is passed, run in headless mode
+		if (nogui) {
+			new MidiJamServer(port).startServerHeadless(port);
+		} else {
+			EventQueue.invokeLater(() -> {
+				try {
+					UIManager.setLookAndFeel(new FlatDarkLaf());
+					MidiJamServer frame = new MidiJamServer();
+					frame.setVisible(true);
+				} catch (UnsupportedLookAndFeelException e) {
+					e.printStackTrace();
+				}
+			});
+		}
+	}
+
+	// Headless mode: starts server without prompting for port
+	private void startServerHeadless(int port) {
+		try {
+			serverSocket = new DatagramSocket(port);
+			System.out.println("Server running in headless mode at IP: " + InetAddress.getLocalHost().getHostAddress()
+					+ ", Port: " + serverSocket.getLocalPort());
+			startServerThread();
+		} catch (Exception e) {
+			System.err.println("Failed to start server in headless mode: " + e.getMessage());
+		}
+	}
+
+	// Constructor for headless mode (no GUI)
+	public MidiJamServer(int port) {
+		connectedClients = new HashMap<>();
+		this.serverSocket = null; // We'll initialize it later in headless mode
 	}
 
 	public MidiJamServer() {
