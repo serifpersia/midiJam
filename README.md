@@ -41,7 +41,7 @@ Make sure you have Java JRE/JDK installed any LTS 17 or newer. [Temurin](https:/
 
 ![DAW and VST Setup](https://github.com/user-attachments/assets/9be1cee9-abd9-4ff5-b094-192452312b86)
 
-You can use MiniHost Modular on Windows and Mac to route vsts with different midi ch assigned
+You can use [MiniHost Modular](https://forum.image-line.com/viewtopic.php?f=1919&t=123031) on Windows and Mac to route vsts with different midi ch assigned
 ![image](https://github.com/user-attachments/assets/fac1eb21-60c4-4d56-9e44-86a3ee064703)
 
 ### 4. Chat & Chords
