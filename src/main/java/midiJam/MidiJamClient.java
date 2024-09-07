@@ -5,6 +5,7 @@ import java.net.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -19,7 +20,9 @@ import javax.swing.text.StyledDocument;
 import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiDevice;
@@ -37,6 +40,7 @@ public class MidiJamClient extends JFrame {
 	private static int clientId;
 
 	private static String clientName;
+	private static final String HOSTNAME_FILE_NAME = "hostname.config";
 
 	private static DatagramSocket clientSocket;
 	private static InetAddress serverAddress;
@@ -98,12 +102,13 @@ public class MidiJamClient extends JFrame {
 	public MidiJamClient() throws MidiUnavailableException {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(350, 450);
-		setTitle("midiJam Client v1.0.1");
+		setTitle("midiJam Client v1.0.2");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 
 		initMidi();
 		initComponents();
+		loadConfiguration();
 
 		setLocationRelativeTo(null);
 		addWindowListener(new WindowAdapter() {
@@ -335,6 +340,7 @@ public class MidiJamClient extends JFrame {
 	private void startClient() {
 		try {
 			clientSocket = new DatagramSocket();
+			loadNameAndHostNameFromFile();
 			ClientSetup clientSetup = promptClientSetup();
 
 			if (clientSetup != null) {
@@ -352,10 +358,58 @@ public class MidiJamClient extends JFrame {
 		}
 	}
 
+	private void loadConfiguration() {
+		File file = new File("clientDetails.config");
+
+		if (file.exists()) {
+			try (Scanner scanner = new Scanner(file)) {
+				if (scanner.hasNextLine()) {
+					int inputDevice = scanner.nextInt();
+					int outputDevice = scanner.nextInt();
+					int channel = scanner.nextInt();
+
+					setDevice(inputDevice, outputDevice, channel);
+
+					System.out.println("Configuration loaded from file.");
+				}
+			} catch (IOException e) {
+				System.err.println("Error reading configuration from file. Using defaults.");
+			}
+		} else {
+			saveConfiguration(0, 0, 0);
+		}
+	}
+
+	private void saveConfiguration(int inputDeviceName, int outputDeviceName, int channelName) {
+		try (PrintWriter writer = new PrintWriter("clientDetails.config")) {
+			writer.println(inputDeviceName);
+			writer.println(outputDeviceName);
+			writer.println(channelName);
+			System.out.println("Configuration saved to file.");
+		} catch (IOException e) {
+			System.err.println("Failed to save configuration to file: " + e.getMessage());
+		}
+	}
+
+	private void setDevice(int input, int output, int ch) {
+		int inputIndex = (input >= 0 && input < inputDeviceDropdown.getItemCount()) ? input : 0;
+		int outputIndex = (output >= 0 && output < outputDeviceDropdown.getItemCount()) ? output : 0;
+		int channelIndex = (ch >= 0 && ch < midi_ch_list_dropdown.getItemCount()) ? ch : 0;
+
+		inputDeviceDropdown.setSelectedIndex(inputIndex);
+		outputDeviceDropdown.setSelectedIndex(outputIndex);
+		midi_ch_list_dropdown.setSelectedIndex(channelIndex);
+	}
+
 	private ClientSetup promptClientSetup() {
 		JPanel panel = new JPanel(new GridLayout(0, 1));
-		JTextField nameField = new JTextField();
-		JTextField ipField = new JTextField("127.0.0.1:5000");
+
+		String[] savedInfo = loadNameAndHostNameFromFile();
+		String savedName = savedInfo[0];
+		String savedHostName = savedInfo[1];
+
+		JTextField nameField = new JTextField(savedName);
+		JTextField ipField = new JTextField(savedHostName);
 
 		panel.add(new JLabel("Enter your name:"));
 		panel.add(nameField);
@@ -368,13 +422,63 @@ public class MidiJamClient extends JFrame {
 		if (result == JOptionPane.OK_OPTION) {
 			try {
 				String[] serverDetails = ipField.getText().trim().split(":");
-				return new ClientSetup(nameField.getText().trim(), InetAddress.getByName(serverDetails[0]),
-						Integer.parseInt(serverDetails[1]));
+				if (serverDetails.length != 2) {
+					throw new IllegalArgumentException("Invalid server details format");
+				}
+
+				String ip = serverDetails[0];
+				int port = Integer.parseInt(serverDetails[1]);
+
+				saveNameAndHostNameToFile(nameField.getText().trim(), ipField.getText().trim());
+
+				return new ClientSetup(nameField.getText().trim(), InetAddress.getByName(ip), port);
 			} catch (Exception e) {
-				showErrorDialog("Invalid IP or Port.");
+				showErrorDialog("Invalid IP or Port. Please ensure the format is 'IP:Port'.");
 			}
 		}
 		return null;
+	}
+
+	private String generateDefaultName() {
+		Random random = new Random();
+		int randomId = 10000 + random.nextInt(90000);
+		return "Guest#" + randomId;
+	}
+
+	private String[] loadNameAndHostNameFromFile() {
+		File file = new File(HOSTNAME_FILE_NAME);
+		String defaultName = generateDefaultName();
+		String defaultHostName = "127.0.0.1:5000";
+
+		if (file.exists()) {
+			try (Scanner fileScanner = new Scanner(file)) {
+				if (fileScanner.hasNextLine()) {
+					String name = fileScanner.nextLine();
+					if (fileScanner.hasNextLine()) {
+						String hostName = fileScanner.nextLine();
+						System.out.println("Name and HostName loaded from file: " + name + " - " + hostName);
+						return new String[] { name, hostName };
+					}
+				}
+				System.out.println("HostName file is incomplete. Using defaults.");
+			} catch (IOException e) {
+				System.err.println("Error reading Name and HostName from file. Using defaults.");
+			}
+		} else {
+			System.out.println("HostName file not found. Using defaults.");
+			saveNameAndHostNameToFile(defaultName, defaultHostName);
+		}
+		return new String[] { defaultName, defaultHostName };
+	}
+
+	private void saveNameAndHostNameToFile(String name, String hostName) {
+		try (PrintWriter writer = new PrintWriter(HOSTNAME_FILE_NAME)) {
+			writer.println(name);
+			writer.println(hostName);
+			System.out.println("Name and HostName saved to file: " + name + " - " + hostName);
+		} catch (IOException e) {
+			System.err.println("Failed to save Name and HostName to file: " + e.getMessage());
+		}
 	}
 
 	private void updateSessionLabel(int count) {
@@ -643,7 +747,8 @@ public class MidiJamClient extends JFrame {
 
 	private void closeClient() {
 		stopMidiRouting();
-
+		saveConfiguration(inputDeviceDropdown.getSelectedIndex(), outputDeviceDropdown.getSelectedIndex(),
+				midi_ch_list_dropdown.getSelectedIndex());
 		if (clientSocket != null && !clientSocket.isClosed()) {
 			String disconnectMessage = "DISCONNECT:" + clientId;
 			sendPacket(disconnectMessage.getBytes());

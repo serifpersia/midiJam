@@ -1,32 +1,47 @@
 package midiJam;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.Scanner;
+import java.util.Set;
 
 public class MidiJamServerCli {
 
 	private static final int MAX_ID = 9999;
+	private static final String PORT_FILE_NAME = "port.config";
 	private DatagramSocket serverSocket;
 	private Thread serverThread;
 	private Set<Integer> assignedIds = new HashSet<>();
 	private Map<Integer, ClientInfo> connectedClients = new HashMap<>();
-	private Scanner scanner = new Scanner(System.in);
 	private volatile boolean running = true;
 
 	public static void main(String[] args) {
 		MidiJamServerCli server = new MidiJamServerCli();
-		server.startServer();
+		server.startServer(args);
 	}
 
-	private void startServer() {
-		int port = promptForPort();
+	private void startServer(String[] args) {
+		int port = loadPortFromFile();
+		for (int i = 0; i < args.length; i++) {
+			if ("-port".equals(args[i]) && i + 1 < args.length) {
+				try {
+					port = Integer.parseInt(args[i + 1]);
+					System.out.println("Port provided from arguments: " + port);
+					savePortToFile(port);
+					break;
+				} catch (NumberFormatException e) {
+					System.err.println("Invalid port number in arguments. Using the file/default port.");
+				}
+			}
+		}
+
 		try {
 			serverSocket = new DatagramSocket(port);
 			System.out.println("Server running at IP: " + InetAddress.getLocalHost().getHostAddress() + ", Port: "
@@ -44,20 +59,35 @@ public class MidiJamServerCli {
 		}
 	}
 
-	private int promptForPort() {
+	private int loadPortFromFile() {
+		File file = new File(PORT_FILE_NAME);
 		int defaultPort = 5000;
-		System.out.print("Enter UDP port (default is 5000): ");
-		String portStr = scanner.nextLine();
-		if (portStr.isEmpty()) {
-			return defaultPort;
-		}
-		try {
-			return Integer.parseInt(portStr);
-		} catch (NumberFormatException e) {
-			System.err.println("Invalid port number. Please enter a valid integer.");
-			System.exit(1);
+		if (file.exists()) {
+			try (Scanner fileScanner = new Scanner(file)) {
+				if (fileScanner.hasNextInt()) {
+					int port = fileScanner.nextInt();
+					System.out.println("Port loaded from file: " + port);
+					return port;
+				} else {
+					System.out.println("Port file is empty or invalid. Using default port: " + defaultPort);
+				}
+			} catch (IOException e) {
+				System.err.println("Error reading port from file. Using default port: " + defaultPort);
+			}
+		} else {
+			System.out.println("Port file not found. Using default port: " + defaultPort);
+			savePortToFile(defaultPort);
 		}
 		return defaultPort;
+	}
+
+	private void savePortToFile(int port) {
+		try (PrintWriter writer = new PrintWriter(PORT_FILE_NAME)) {
+			writer.println(port);
+			System.out.println("Port saved to file: " + port);
+		} catch (IOException e) {
+			System.err.println("Failed to save port to file: " + e.getMessage());
+		}
 	}
 
 	private void startServerThread() {

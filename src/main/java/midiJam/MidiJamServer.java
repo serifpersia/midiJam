@@ -6,17 +6,20 @@ import javax.swing.*;
 import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.Set;
 
 @SuppressWarnings("serial")
 public class MidiJamServer extends JFrame {
 
 	private static final int MAX_ID = 9999;
-
+	private static final String PORT_FILE_NAME = "port.config";
 	private DatagramSocket serverSocket;
 	private Thread serverThread;
 
@@ -40,7 +43,7 @@ public class MidiJamServer extends JFrame {
 	public MidiJamServer() {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(300, 200);
-		setTitle("midiJam Server v1.0.0");
+		setTitle("midiJam Server v1.0.2");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 
@@ -77,23 +80,24 @@ public class MidiJamServer extends JFrame {
 	}
 
 	private int promptForPort() {
-		int defaultPort = 5000;
+		int port = loadPortFromFile();
 
-		String portStr = JOptionPane.showInputDialog(this, "Enter UDP port (default is 5000):", defaultPort);
+		String portStr = JOptionPane.showInputDialog(this, "Enter UDP port (default is 5000):", port);
 
 		if (portStr == null) {
 			System.exit(0);
 		}
 
 		try {
-			return Integer.parseInt(portStr);
+			port = Integer.parseInt(portStr);
+			savePortToFile(port);
 		} catch (NumberFormatException e) {
 			JOptionPane.showMessageDialog(this, "Invalid port number. Please enter a valid integer.", "Error",
 					JOptionPane.ERROR_MESSAGE);
 			System.exit(1);
 		}
 
-		return defaultPort;
+		return port;
 	}
 
 	private void startServer() {
@@ -116,6 +120,37 @@ public class MidiJamServer extends JFrame {
 			}
 		});
 		serverThread.start();
+	}
+
+	private int loadPortFromFile() {
+		File file = new File(PORT_FILE_NAME);
+		int defaultPort = 5000;
+		if (file.exists()) {
+			try (Scanner fileScanner = new Scanner(file)) {
+				if (fileScanner.hasNextInt()) {
+					int port = fileScanner.nextInt();
+					System.out.println("Port loaded from file: " + port);
+					return port;
+				} else {
+					System.out.println("Port file is empty or invalid. Using default port: " + defaultPort);
+				}
+			} catch (IOException e) {
+				System.err.println("Error reading port from file. Using default port: " + defaultPort);
+			}
+		} else {
+			System.out.println("Port file not found. Using default port: " + defaultPort);
+			savePortToFile(defaultPort);
+		}
+		return defaultPort;
+	}
+
+	private void savePortToFile(int port) {
+		try (PrintWriter writer = new PrintWriter(PORT_FILE_NAME)) {
+			writer.println(port);
+			System.out.println("Port saved to file: " + port);
+		} catch (IOException e) {
+			System.err.println("Failed to save port to file: " + e.getMessage());
+		}
 	}
 
 	private void handleClientRequest(byte[] buffer) {
