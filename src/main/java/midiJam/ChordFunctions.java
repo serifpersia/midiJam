@@ -64,39 +64,60 @@ public class ChordFunctions {
 		}
 		Collections.sort(temp);
 
-		List<ChordFunctions> possibleChords = new ArrayList<>();
-		ChordFunctions baseChord = new ChordFunctions(temp);
-		possibleChords.add(baseChord);
+		ChordFunctions bestChord = new ChordFunctions(temp);
+		List<Integer> bestChordList = bestChord.chord;
 
-		while (nextPermutation(temp)) {
-			possibleChords.add(new ChordFunctions(temp));
+		List<Integer> currentPermutation = new ArrayList<>(temp);
+		int[] indices = new int[temp.size()];
+		for (int i = 0; i < indices.length; i++) {
+			indices[i] = 0;
 		}
 
-		possibleChords.sort((chord1, chord2) -> {
-			int rootComparison = chord1.getRootPosition().compareTo(chord2.getRootPosition());
-			return rootComparison != 0 ? rootComparison : ChordFunctions.compareChords(chord1, chord2) ? -1 : 1;
-		});
+		do {
+			ChordFunctions currentChord = new ChordFunctions(currentPermutation);
+			if (ChordFunctions.compareChords(currentChord, bestChord)) {
+				bestChord = currentChord;
+				bestChordList = new ArrayList<>(currentPermutation);
+			}
+		} while (nextPermutation(currentPermutation, indices));
 
-		return possibleChords.get(0).chord;
+		return bestChordList;
 	}
 
-	private Integer getRootPosition() {
-		return chord.get(0);
-	}
-
-	private static boolean nextPermutation(List<Integer> array) {
-		int i = array.size() - 2;
-		while (i >= 0 && array.get(i) >= array.get(i + 1))
+	private static boolean nextPermutation(List<Integer> array, int[] indices) {
+		int i = indices.length - 2;
+		while (i >= 0 && indices[i] >= indices[i + 1]) {
 			i--;
-		if (i < 0)
+		}
+		if (i < 0) {
 			return false;
+		}
 
-		int j = array.size() - 1;
-		while (array.get(j) <= array.get(i))
+		int j = indices.length - 1;
+		while (indices[j] <= indices[i]) {
 			j--;
-		Collections.swap(array, i, j);
-		Collections.reverse(array.subList(i + 1, array.size()));
+		}
+		swap(indices, i, j);
+		reverse(indices, i + 1, indices.length - 1);
+
+		// Update array based on indices
+		for (int k = 0; k < indices.length; k++) {
+			array.set(k, indices[k]);
+		}
+
 		return true;
+	}
+
+	private static void swap(int[] array, int i, int j) {
+		int temp = array[i];
+		array[i] = array[j];
+		array[j] = temp;
+	}
+
+	private static void reverse(int[] array, int start, int end) {
+		while (start < end) {
+			swap(array, start++, end--);
+		}
 	}
 
 	public static String getFirstRecognizedChord(List<Integer> chord, boolean flats) {
