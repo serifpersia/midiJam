@@ -27,7 +27,7 @@ public class MidiJamServerCli {
 		server.startServer(args);
 	}
 
-	private void startServer(String[] args) {
+	void startServer(String[] args) {
 		int port = loadPortFromFile();
 		for (int i = 0; i < args.length; i++) {
 			if ("-port".equals(args[i]) && i + 1 < args.length) {

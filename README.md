@@ -15,7 +15,7 @@ Make sure you have Java JRE/JDK installed any LTS 17 or newer. [Temurin](https:/
 ### 1. Host Setup
 
 - **Server Application**: Start the server application on your machine. You will be prompted to enter a UDP port number, which will be used for communication between the server and clients.
-  
+  *run cli version on terminal with --nogui and if u want to specify the port add -port <yourport> example `java -jar midiJamServer-1.0.3.jar --nogui -port 25565`
 - **Public Access**: You can make your server accessible to the public in one of two ways:
   1. **Port Forwarding**: Forward the chosen UDP port on your router to your server's local IP address.
   2. **Tunnel Service**: Use a tunneling service like [playit.gg](https://playit.gg) to expose your server to the internet without manual port forwarding.

@@ -29,21 +29,27 @@ public class MidiJamServer extends JFrame {
 	private static JTextArea statusArea;
 
 	public static void main(String[] args) {
-		EventQueue.invokeLater(() -> {
-			try {
-				UIManager.setLookAndFeel(new FlatDarkLaf());
-				MidiJamServer frame = new MidiJamServer();
-				frame.setVisible(true);
-			} catch (UnsupportedLookAndFeelException e) {
-				e.printStackTrace();
-			}
-		});
+		if (args.length > 0 && "--nogui".equals(args[0])) {
+			new MidiJamServerCli();
+			MidiJamServerCli server = new MidiJamServerCli();
+			server.startServer(args);
+		} else {
+			EventQueue.invokeLater(() -> {
+				try {
+					UIManager.setLookAndFeel(new FlatDarkLaf());
+					MidiJamServer frame = new MidiJamServer();
+					frame.setVisible(true);
+				} catch (UnsupportedLookAndFeelException e) {
+					e.printStackTrace();
+				}
+			});
+		}
 	}
 
 	public MidiJamServer() {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(300, 200);
-		setTitle("midiJam Server v1.0.2");
+		setTitle("midiJam Server v1.0.3");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 

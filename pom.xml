@@ -60,25 +60,6 @@
 							<finalName>midiJam-server</finalName>
 						</configuration>
 					</execution>
-					<!-- Execution for midiJam ServerCli -->
-					<execution>
-						<id>servercli-jar</id>
-						<phase>package</phase>
-						<goals>
-							<goal>single</goal>
-						</goals>
-						<configuration>
-							<archive>
-								<manifest>
-									<mainClass>midiJam.MidiJamServerCli</mainClass>
-								</manifest>
-							</archive>
-							<descriptorRefs>
-								<descriptorRef>jar-with-dependencies</descriptorRef>
-							</descriptorRefs>
-							<finalName>midiJam-servercli</finalName>
-						</configuration>
-					</execution>
 				</executions>
 			</plugin>
 		</plugins>
@@ -149,37 +130,6 @@
 				</plugins>
 			</build>
 		</profile>
-		<profile>
-			<id>servercli</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-assembly-plugin</artifactId>
-						<version>3.3.0</version>
-						<executions>
-							<execution>
-								<id>servercli-jar</id>
-								<phase>package</phase>
-								<goals>
-									<goal>single</goal>
-								</goals>
-								<configuration>
-									<archive>
-										<manifest>
-											<mainClass>midiJam.MidiJamServerCli</mainClass>
-										</manifest>
-									</archive>
-									<descriptorRefs>
-										<descriptorRef>jar-with-dependencies</descriptorRef>
-									</descriptorRefs>
-									<finalName>midiJam-servercli</finalName>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
 	</profiles>
 </project>
+

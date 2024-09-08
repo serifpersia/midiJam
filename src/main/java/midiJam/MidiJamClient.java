@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -102,7 +103,7 @@ public class MidiJamClient extends JFrame {
 	public MidiJamClient() throws MidiUnavailableException {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(350, 450);
-		setTitle("midiJam Client v1.0.2");
+		setTitle("midiJam Client v1.0.3");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 
@@ -833,7 +834,7 @@ public class MidiJamClient extends JFrame {
 				int data1 = sm.getData1();
 				int data2 = sm.getData2();
 
-				int note = sm.getData1();
+				byte note = (byte) sm.getData1();
 				boolean isNoteOn = sm.getCommand() == ShortMessage.NOTE_ON;
 				boolean isNoteOff = sm.getCommand() == ShortMessage.NOTE_OFF;
 
@@ -845,8 +846,12 @@ public class MidiJamClient extends JFrame {
 					ChordFunctions.removeNoteFromActiveList(note);
 					SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 0));
 				}
-				String chordName = ChordFunctions.setChordName(
-						ChordFunctions.getFirstRecognizedChord(new ArrayList<>(ChordFunctions.activeNotes), false));
+
+				List<Integer> activeNotes = ChordFunctions.getActiveNotes().stream().map(Byte::intValue)
+						.collect(Collectors.toList());
+
+				String chordName = ChordFunctions.getFirstRecognizedChord(activeNotes, false);
+
 				ChordFunctions.updateChordName(chordName);
 				SwingUtilities.invokeLater(() -> chordPanelInstance.updateChordLabel(clientName, chordName));
 

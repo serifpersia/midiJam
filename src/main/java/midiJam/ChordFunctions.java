@@ -6,7 +6,10 @@ public class ChordFunctions {
 
 	private List<Integer> chord;
 	private List<Integer> pattern;
-	static final List<Integer> activeNotes = new ArrayList<>();
+	private static final int MIN_NOTE = 21;
+	private static final int MAX_NOTE = 108;
+	private static final boolean[] activeNotes = new boolean[MAX_NOTE - MIN_NOTE + 1];
+
 	public static String detectedChord;
 
 	public ChordFunctions(List<Integer> newChord) {
@@ -198,11 +201,11 @@ public class ChordFunctions {
 		public static String getIntervalString(List<Integer> stackedChord) {
 			StringBuilder p = new StringBuilder();
 			for (int i = 0; i < stackedChord.size() - 1; i++) {
-				int interval = stackedChord.get(i + 1) - stackedChord.get(i);
-				if (interval < 0)
-					interval += 12;
-				p.append(interval).append(",");
+				int interval = (stackedChord.get(i + 1) - stackedChord.get(i) + 12) % 12;
+				p.append(interval).append(',');
 			}
+			if (p.length() > 0)
+				p.setLength(p.length() - 1);
 			return p.toString();
 		}
 
@@ -246,14 +249,30 @@ public class ChordFunctions {
 		detectedChord = name;
 	}
 
-	public static void addNoteToActiveList(int note) {
-		if (!activeNotes.contains(note) && note >= 21 && note <= 108) {
-			activeNotes.add(note);
+	private static int noteToIndex(byte note) {
+		return note - MIN_NOTE;
+	}
+
+	public static void addNoteToActiveList(byte note) {
+		if (note >= MIN_NOTE && note <= MAX_NOTE) {
+			activeNotes[noteToIndex(note)] = true;
 		}
 	}
 
-	public static void removeNoteFromActiveList(int note) {
-		activeNotes.remove(Integer.valueOf(note));
+	public static void removeNoteFromActiveList(byte note) {
+		if (note >= MIN_NOTE && note <= MAX_NOTE) {
+			activeNotes[noteToIndex(note)] = false;
+		}
+	}
+
+	public static List<Byte> getActiveNotes() {
+		List<Byte> notes = new ArrayList<>();
+		for (int i = 0; i < activeNotes.length; i++) {
+			if (activeNotes[i]) {
+				notes.add((byte) (i + MIN_NOTE));
+			}
+		}
+		return notes;
 	}
 
 }
