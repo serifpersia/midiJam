@@ -44,6 +44,8 @@ Make sure you have Java JRE/JDK installed any LTS 17 or newer. [Temurin](https:/
 You can use [MiniHost Modular](https://forum.image-line.com/viewtopic.php?f=1919&t=123031) on Windows and Mac to route vsts with different midi ch assigned. [Download from private gdrive source](https://drive.google.com/drive/folders/1TOBFNVziPWlAZdfsVFBB7751qfIr82AN?usp=drive_link) or sign in to image line site and access the official links from their forums. You might need to run installer exe from run as administrator cmd
 I created a simple [graph](https://github.com/serifpersia/midiJam/blob/main/midiJam.gra) file with midi router node[(uses pizMIDI midi channel filter vst dlls)](https://www.paulcecchettimusic.com/piz-midi-utilities-archived-download-links/)
 
+![image](https://github.com/user-attachments/assets/d02b9336-400a-4d7a-b408-3f97f7934876)
+
 ### 4. Chat & Chords
 
 - **Chat**: The client application features a chat window for communication between participants.
