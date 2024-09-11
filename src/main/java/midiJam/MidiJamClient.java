@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
-import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -302,10 +301,18 @@ public class MidiJamClient extends JFrame {
 
 	private JComboBox<Object> createMidiChannelDropdown() {
 		JComboBox<Object> dropdown = new JComboBox<>();
-		for (int i = 0; i < 16; i++) {
-			dropdown.addItem("CH" + String.format("%02d", i + 1));
+
+		String[] instruments = { "Piano: CH01", "Piano: CH02", "Strings: CH03", "Bass: CH04", "Drums/Percussion: CH05",
+				"Lead Synth: CH06", "Pad Synth: CH07", "Guitar: CH08", "Brass: CH09", "Woodwinds: CH10", "Organ: CH11",
+				"Arpeggiator Synth: CH12", "Sound Effects/FX: CH13", "Choir/Vocals: CH14", "Ambient/FX: CH15",
+				"Lead Vocal Sample: CH16" };
+
+		for (String instrument : instruments) {
+			dropdown.addItem(instrument);
 		}
+
 		dropdown.addActionListener(e -> customChannel = dropdown.getSelectedIndex());
+
 		return dropdown;
 	}
 
@@ -839,21 +846,18 @@ public class MidiJamClient extends JFrame {
 				boolean isNoteOff = sm.getCommand() == ShortMessage.NOTE_OFF;
 
 				if (isNoteOn) {
-					ChordFunctions.addNoteToActiveList(note);
+					ChordFunctions.activeNotes.add(note);
 					SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 1));
 
 				} else if (isNoteOff) {
-					ChordFunctions.removeNoteFromActiveList(note);
+					ChordFunctions.activeNotes.remove(note);
 					SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 0));
 				}
 
-				List<Integer> activeNotes = ChordFunctions.getActiveNotes().stream().map(Byte::intValue)
-						.collect(Collectors.toList());
+				ChordFunctions.detectIntervalOrChord(ChordFunctions.activeNotes);
 
-				String chordName = ChordFunctions.getFirstRecognizedChord(activeNotes, false);
-
-				ChordFunctions.updateChordName(chordName);
-				SwingUtilities.invokeLater(() -> chordPanelInstance.updateChordLabel(clientName, chordName));
+				SwingUtilities
+						.invokeLater(() -> chordPanelInstance.updateChordLabel(clientName, ChordFunctions.chordName));
 
 				if (command == ShortMessage.NOTE_ON || command == ShortMessage.NOTE_OFF
 						|| command == ShortMessage.CONTROL_CHANGE) {
@@ -863,8 +867,11 @@ public class MidiJamClient extends JFrame {
 						msg.setMessage(status, customChannel, data1, data2);
 						outputReceiver.send(msg, -1);
 
-						sendMIDI(msg);
-						sendChordKeys(note, isNoteOn, chordName);
+						if (!statusIndicatorPanel.muted) {
+							sendMIDI(msg);
+							sendChordKeys(note, isNoteOn, ChordFunctions.chordName);
+						}
+
 					} catch (InvalidMidiDataException e) {
 						e.printStackTrace();
 					}
