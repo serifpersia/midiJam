@@ -49,7 +49,7 @@ public class MidiJamServer extends JFrame {
 	public MidiJamServer() {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(300, 200);
-		setTitle("midiJam Server v1.0.3");
+		setTitle("midiJam Server v1.0.4");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 

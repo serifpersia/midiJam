@@ -102,7 +102,7 @@ public class MidiJamClient extends JFrame {
 	public MidiJamClient() throws MidiUnavailableException {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(350, 450);
-		setTitle("midiJam Client v1.0.3");
+		setTitle("midiJam Client v1.0.4");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 
