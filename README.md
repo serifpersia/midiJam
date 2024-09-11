@@ -41,8 +41,8 @@ Make sure you have Java JRE/JDK installed any LTS 17 or newer. [Temurin](https:/
 
 ![DAW and VST Setup](https://github.com/user-attachments/assets/9be1cee9-abd9-4ff5-b094-192452312b86)
 
-You can use [MiniHost Modular](https://forum.image-line.com/viewtopic.php?f=1919&t=123031) on Windows and Mac to route vsts with different midi ch assigned
-![image](https://github.com/user-attachments/assets/fac1eb21-60c4-4d56-9e44-86a3ee064703)
+You can use [MiniHost Modular](https://forum.image-line.com/viewtopic.php?f=1919&t=123031) [grive](https://drive.google.com/drive/folders/1TOBFNVziPWlAZdfsVFBB7751qfIr82AN?usp=drive_link)(You might need to run installer exe from run as administrator cmd)on Windows and Mac to route vsts with different midi ch assigned
+I created a simple [graph](https://github.com/serifpersia/midiJam/blob/main/midiJam.gra) file with midi router node[(uses pizMIDI midi channel filter vst dlls)](https://www.paulcecchettimusic.com/piz-midi-utilities-archived-download-links/)
 
 ### 4. Chat & Chords
 
