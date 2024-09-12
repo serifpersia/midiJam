@@ -212,12 +212,16 @@ public class MidiJamServer extends JFrame {
 	}
 
 	private void handleDisconnectMessage(String message) {
-		int clientId = Integer.parseInt(message.substring(11));
-		connectedClients.remove(clientId);
-		appendStatus("Client: " + clientId + " disconnected");
+		try {
+			int clientId = Integer.parseInt(message.substring(11));
+			connectedClients.remove(clientId);
+			appendStatus("Client: " + clientId + " disconnected");
 
-		broadcastClientCount();
-		broadcastClientList();
+			broadcastClientCount();
+			broadcastClientList();
+		} catch (NumberFormatException | StringIndexOutOfBoundsException e) {
+			appendStatus("Invalid disconnect message format: " + e.getMessage());
+		}
 	}
 
 	private void handleChordKeysMessage(String message) {
@@ -316,9 +320,14 @@ public class MidiJamServer extends JFrame {
 	}
 
 	private void forwardMessageToClients(String message, int senderClientId) {
+
+		boolean isMutedMessage = message.startsWith("MIDI:") || message.startsWith("CHORD_KEYS:");
+
 		connectedClients.values().stream().filter(client -> client.getId() != senderClientId).forEach(client -> {
-			if (client.getMutedClients().contains(senderClientId)) {
-				return;
+			if (isMutedMessage) {
+				if (!client.getMutedClients().contains(senderClientId)) {
+					sendPacketToClient(message, client);
+				}
 			} else {
 				sendPacketToClient(message, client);
 			}

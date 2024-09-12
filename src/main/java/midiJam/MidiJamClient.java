@@ -20,6 +20,7 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -68,6 +69,7 @@ public class MidiJamClient extends JFrame {
 
 	private static Map<String, String> currentClients = new HashMap<>();
 	private JPanel sessionPanelContent;
+	private StatusIndicatorPanel clientStatusPanel;
 
 	private static Set<Integer> mutedClients = new HashSet<>();
 
@@ -116,7 +118,6 @@ public class MidiJamClient extends JFrame {
 		initMidi();
 		initComponents();
 		loadConfiguration();
-
 		setLocationRelativeTo(null);
 
 		addWindowListener(new WindowAdapter() {
@@ -246,7 +247,7 @@ public class MidiJamClient extends JFrame {
 		sessionPanelContent.setLayout(new BoxLayout(sessionPanelContent, BoxLayout.Y_AXIS));
 
 		JScrollPane sessionPanel = new JScrollPane(sessionPanelContent);
-		sessionPanel.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+		sessionPanel.setVerticalScrollBar(new CustomScrollBar(JScrollBar.VERTICAL));
 
 		return sessionPanel;
 	}
@@ -269,9 +270,13 @@ public class MidiJamClient extends JFrame {
 		tglConnect = new JToggleButton("Connect");
 		tglConnect.addActionListener(e -> {
 			if (tglConnect.isSelected()) {
-				startClient();
+				if (connectClient()) {
+					tglConnect.setText("Disconnect");
+				} else {
+					tglConnect.setSelected(false);
+				}
 			} else {
-				closeClient();
+				disconnectClient();
 			}
 		});
 		connectBtnPanel.add(tglConnect, BorderLayout.CENTER);
@@ -364,6 +369,25 @@ public class MidiJamClient extends JFrame {
 		messagePanel.add(sendButton, BorderLayout.EAST);
 
 		return messagePanel;
+	}
+
+	private boolean connectClient() {
+		try {
+			startClient();
+			return true;
+		} catch (Exception ex) {
+			appendStatus("Failed to connect: " + ex.getMessage());
+			return false;
+		}
+	}
+
+	private void disconnectClient() {
+		try {
+			closeClient();
+			tglConnect.setText("Connect");
+		} catch (Exception ex) {
+			appendStatus("Failed to disconnect: " + ex.getMessage());
+		}
 	}
 
 	private void startClient() {
@@ -624,25 +648,49 @@ public class MidiJamClient extends JFrame {
 			return;
 		}
 
-		JLabel clientLabel = new JLabel(formattedClientInfo);
-		JToggleButton muteButton = new JToggleButton("Mute");
+		JPanel row = new JPanel(new GridBagLayout());
+		row.setPreferredSize(new Dimension(0, 45));
 
-		muteButton.addActionListener(e -> {
-			if (muteButton.isSelected()) {
+		GridBagConstraints gbc = new GridBagConstraints();
+		gbc.fill = GridBagConstraints.BOTH;
+		gbc.insets = new Insets(0, 5, 0, 5);
+
+		JPanel leftPanel = new JPanel(new GridBagLayout());
+		leftPanel.setPreferredSize(new Dimension(0, 45));
+		JLabel clientLabel = new JLabel(formattedClientInfo, SwingConstants.CENTER);
+		leftPanel.add(clientLabel);
+		gbc.weightx = 1.0;
+		gbc.weighty = 1.0;
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		row.add(leftPanel, gbc);
+
+		JPanel rightPanel = new JPanel(new GridBagLayout());
+		rightPanel.setPreferredSize(new Dimension(45, 45));
+		clientStatusPanel = new StatusIndicatorPanel();
+
+		clientStatusPanel.setConnected(true);
+		clientStatusPanel.setToolTipText("Mute/UnMute Client");
+
+		clientStatusPanel.setMuteStateListener(new StatusIndicatorPanel.MuteStateListener() {
+			@Override
+			public void onMuted() {
 				sendMute(clientIdToToggle);
-				muteButton.setText("Unmute");
-			} else {
+			}
+
+			@Override
+			public void onUnmuted() {
 				sendUnmute(clientIdToToggle);
-				muteButton.setText("Mute");
 			}
 		});
 
-		JPanel rowPanel = new JPanel();
-		rowPanel.setLayout(new BorderLayout());
-		rowPanel.add(clientLabel, BorderLayout.CENTER);
-		rowPanel.add(muteButton, BorderLayout.EAST);
+		rightPanel.add(clientStatusPanel);
+		gbc.weightx = 0.0;
+		gbc.gridx = 1;
+		gbc.gridy = 0;
+		row.add(rightPanel, gbc);
 
-		sessionPanelContent.add(rowPanel);
+		sessionPanelContent.add(row);
 		sessionPanelContent.revalidate();
 		sessionPanelContent.repaint();
 	}
@@ -650,12 +698,17 @@ public class MidiJamClient extends JFrame {
 	private void removeClientRow(String clientId) {
 		for (Component comp : sessionPanelContent.getComponents()) {
 			if (comp instanceof JPanel) {
-				JLabel clientLabel = (JLabel) ((JPanel) comp).getComponent(0);
-				if (clientLabel.getText().contains("ID:" + clientId)) {
-					sessionPanelContent.remove(comp);
-					sessionPanelContent.revalidate();
-					sessionPanelContent.repaint();
-					break;
+				JPanel row = (JPanel) comp;
+				Component[] rowComponents = row.getComponents();
+
+				if (rowComponents.length > 0 && rowComponents[0] instanceof JPanel) {
+					JLabel clientLabel = (JLabel) ((JPanel) rowComponents[0]).getComponent(0);
+					if (clientLabel.getText().contains("ID:" + clientId)) {
+						sessionPanelContent.remove(row);
+						sessionPanelContent.revalidate();
+						sessionPanelContent.repaint();
+						break;
+					}
 				}
 			}
 		}
@@ -681,6 +734,7 @@ public class MidiJamClient extends JFrame {
 				startMidiRouting();
 				receiveMessages();
 				statusIndicatorPanel.setConnected(true);
+				statusIndicatorPanel.setToolTipText("Mute/UnMute Myself");
 			} else {
 				showErrorDialog("Failed to receive ID from server.");
 				tglConnect.setSelected(false);
@@ -849,6 +903,7 @@ public class MidiJamClient extends JFrame {
 			// SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
 			SwingUtilities.invokeLater(() -> activeSenderlb.setText("Active Client: " + senderName));
 			statusIndicatorPanel.setActive(true);
+			clientStatusPanel.setActive(true);
 			sendToMidiDevice(status, channel, data1, data2);
 		} else {
 			// SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI message
@@ -926,22 +981,26 @@ public class MidiJamClient extends JFrame {
 		try {
 			DatagramPacket packet = new DatagramPacket(data, data.length, serverAddress, serverPort);
 			clientSocket.send(packet);
-		} catch (Exception e) {
+		} catch (IOException e) {
 			appendStatus("Failed to send packet: " + e.getMessage());
 		}
 	}
 
 	private void closeClient() {
-		stopMidiRouting();
-		saveConfiguration(inputDeviceDropdown.getSelectedIndex(), outputDeviceDropdown.getSelectedIndex(),
-				midi_ch_list_dropdown.getSelectedIndex());
-		if (clientSocket != null && !clientSocket.isClosed()) {
-			String disconnectMessage = "DISCONNECT:" + clientId;
-			sendPacket(disconnectMessage.getBytes());
-
-			clientSocket.close();
-			statusIndicatorPanel.setConnected(false);
-			appendStatus("Disconnected from server.");
+		try {
+			stopMidiRouting();
+			saveConfiguration(inputDeviceDropdown.getSelectedIndex(), outputDeviceDropdown.getSelectedIndex(),
+					midi_ch_list_dropdown.getSelectedIndex());
+			if (clientSocket != null && !clientSocket.isClosed()) {
+				String disconnectMessage = "DISCONNECT:" + clientId;
+				sendPacket(disconnectMessage.getBytes());
+				clientSocket.close();
+				statusIndicatorPanel.setConnected(false);
+				appendStatus("Disconnected from server.");
+			}
+		} catch (Exception e) {
+			appendStatus("Error during disconnection: " + e.getMessage());
+		} finally {
 			tglConnect.setText("Connect");
 		}
 	}
@@ -1065,4 +1124,21 @@ public class MidiJamClient extends JFrame {
 		}
 	}
 
+	private class CustomScrollBar extends JScrollBar {
+		private static final int SCROLL_INCREMENT = 8;
+
+		public CustomScrollBar(int orientation) {
+			super(orientation);
+		}
+
+		@Override
+		public int getUnitIncrement(int direction) {
+			return SCROLL_INCREMENT;
+		}
+
+		@Override
+		public int getBlockIncrement(int direction) {
+			return SCROLL_INCREMENT * 5;
+		}
+	}
 }

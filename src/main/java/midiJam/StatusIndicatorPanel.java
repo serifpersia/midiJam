@@ -1,35 +1,29 @@
 package midiJam;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
+import javax.swing.*;
 
 @SuppressWarnings("serial")
 public class StatusIndicatorPanel extends JPanel {
 
 	private boolean connected = false;
 	private boolean active = false;
-	public boolean muted = false;
+	boolean muted = false;
 
 	private static final Color DISCONNECTED_COLOR = Color.BLACK;
 	private static final Color CONNECTED_COLOR = Color.GREEN;
 	private static final Color ACTIVITY_BORDER_COLOR = Color.ORANGE;
-	private Color MUTED_COLOR = Color.RED;
+	private static final Color MUTED_COLOR = Color.RED;
 
 	private static final int TIMEOUT_PERIOD = 250;
 
 	private Timer inactivityTimer;
+	private MuteStateListener muteStateListener;
 
 	public StatusIndicatorPanel() {
-		setPreferredSize(new Dimension(50, 50));
+		setPreferredSize(new Dimension(45, 45));
 
 		inactivityTimer = new Timer(TIMEOUT_PERIOD, e -> {
 			setActive(false);
@@ -40,15 +34,22 @@ public class StatusIndicatorPanel extends JPanel {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				if (SwingUtilities.isLeftMouseButton(e)) {
-					setMuted(muted);
+					toggleMuted();
 				}
 			}
 		});
 	}
 
-	public void setMuted(boolean muted) {
-		this.muted = !this.muted;
+	private void toggleMuted() {
+		muted = !muted;
 		repaint();
+		if (muteStateListener != null) {
+			if (muted) {
+				muteStateListener.onMuted();
+			} else {
+				muteStateListener.onUnmuted();
+			}
+		}
 	}
 
 	public void setConnected(boolean connected) {
@@ -95,4 +96,13 @@ public class StatusIndicatorPanel extends JPanel {
 		g2d.fillOval(10, 10, width - 20, height - 20);
 	}
 
+	public void setMuteStateListener(MuteStateListener listener) {
+		this.muteStateListener = listener;
+	}
+
+	public interface MuteStateListener {
+		void onMuted();
+
+		void onUnmuted();
+	}
 }
