@@ -6,8 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
@@ -64,6 +66,11 @@ public class MidiJamClient extends JFrame {
 
 	public static StatusIndicatorPanel statusIndicatorPanel;
 
+	private static Map<String, String> currentClients = new HashMap<>();
+	private JPanel sessionPanelContent;
+
+	private static Set<Integer> mutedClients = new HashSet<>();
+
 	private static final Color[] CHAT_COLORS = { new Color(0, 191, 255), new Color(50, 205, 50), new Color(255, 140, 0),
 			new Color(255, 105, 180), new Color(255, 215, 0), new Color(0, 255, 255), new Color(148, 0, 211),
 			new Color(0, 255, 127), new Color(255, 69, 0), new Color(255, 20, 147) };
@@ -102,7 +109,7 @@ public class MidiJamClient extends JFrame {
 	public MidiJamClient() throws MidiUnavailableException {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(350, 450);
-		setTitle("midiJam Client v1.0.4");
+		setTitle("midiJam Client v1.0.5");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 
@@ -111,6 +118,7 @@ public class MidiJamClient extends JFrame {
 		loadConfiguration();
 
 		setLocationRelativeTo(null);
+
 		addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
@@ -204,6 +212,9 @@ public class MidiJamClient extends JFrame {
 		JPanel connectPanel = createConnectPanel();
 		tabbedPane.addTab("Connect", null, connectPanel, null);
 
+		JScrollPane sessionPanel = createSessionPanel();
+		tabbedPane.addTab("Session", null, sessionPanel, null);
+
 		JPanel chatPanel = createChatPanel();
 		tabbedPane.addTab("Chat", null, chatPanel, null);
 
@@ -214,7 +225,7 @@ public class MidiJamClient extends JFrame {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				int selectedIndex = tabbedPane.getSelectedIndex();
-				if (selectedIndex == 2) {
+				if (selectedIndex == 3) {
 					if (chordPanelInstance == null || !chordPanelInstance.isShowing()) {
 						chordPanelInstance = new ChordPanel();
 						chordPanelInstance.setVisible(true);
@@ -222,12 +233,22 @@ public class MidiJamClient extends JFrame {
 						chordPanelInstance.toFront();
 						chordPanelInstance.requestFocus();
 					}
-					tabbedPane.setSelectedIndex(1);
+					tabbedPane.setSelectedIndex(2);
 				}
 			}
 		});
 
 		rootCenter_Panel.add(tabbedPane, BorderLayout.CENTER);
+	}
+
+	private JScrollPane createSessionPanel() {
+		sessionPanelContent = new JPanel();
+		sessionPanelContent.setLayout(new BoxLayout(sessionPanelContent, BoxLayout.Y_AXIS));
+
+		JScrollPane sessionPanel = new JScrollPane(sessionPanelContent);
+		sessionPanel.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+
+		return sessionPanel;
 	}
 
 	private JPanel createConnectPanel() {
@@ -493,6 +514,153 @@ public class MidiJamClient extends JFrame {
 		lb_inSessionCount.setText("In Session: " + count);
 	}
 
+	private void handleClientListMessage(String message) {
+		String clientList = message.substring(12);
+
+		String[] clientArray = clientList.split(",");
+
+		Map<String, String> newClients = new HashMap<>();
+
+		for (String clientInfo : clientArray) {
+			clientInfo = clientInfo.trim();
+
+			int colonIndex = clientInfo.indexOf(':');
+
+			if (colonIndex != -1) {
+				String id = clientInfo.substring(0, colonIndex);
+				String name = clientInfo.substring(colonIndex + 1);
+
+				newClients.put(id, name);
+			}
+		}
+
+		Set<String> addedClients = new HashSet<>(newClients.keySet());
+		addedClients.removeAll(currentClients.keySet());
+
+		Set<String> removedClients = new HashSet<>(currentClients.keySet());
+		removedClients.removeAll(newClients.keySet());
+
+		updateClientRows(newClients, addedClients, removedClients);
+
+		currentClients = newClients;
+	}
+
+	private void handleMuteMessage(String message) {
+		String[] parts = message.split(":");
+		if (parts.length == 3) {
+			int clientId = Integer.parseInt(parts[1]);
+			int clientIdToMute = Integer.parseInt(parts[2]);
+
+			if (clientId == MidiJamClient.clientId) {
+				mutedClients.add(clientIdToMute);
+				appendStatus("You have muted client " + clientIdToMute);
+
+				updateMuteButton(clientIdToMute, true);
+			}
+		} else {
+			appendStatus("Invalid MUTE message format.");
+		}
+	}
+
+	private void handleUnmuteMessage(String message) {
+		String[] parts = message.split(":");
+		if (parts.length == 3) {
+			int clientId = Integer.parseInt(parts[1]);
+			int clientIdToUnmute = Integer.parseInt(parts[2]);
+
+			if (clientId == MidiJamClient.clientId) {
+				mutedClients.remove(clientIdToUnmute);
+				appendStatus("You have unmuted client " + clientIdToUnmute);
+
+				updateMuteButton(clientIdToUnmute, false);
+			}
+		} else {
+			appendStatus("Invalid UNMUTE message format.");
+		}
+	}
+
+	private void updateMuteButton(int clientId, boolean isMuted) {
+		for (Component comp : sessionPanelContent.getComponents()) {
+			if (comp instanceof JPanel) {
+				JLabel clientLabel = (JLabel) ((JPanel) comp).getComponent(0);
+				if (clientLabel.getText().contains("ID:" + clientId)) {
+					JToggleButton muteButton = (JToggleButton) ((JPanel) comp).getComponent(1);
+					muteButton.setSelected(isMuted);
+					muteButton.setText(isMuted ? "Unmute" : "Mute");
+					break;
+				}
+			}
+		}
+	}
+
+	private void updateClientRows(Map<String, String> newClients, Set<String> addedClients,
+			Set<String> removedClients) {
+		for (String id : addedClients) {
+			String name = newClients.get(id);
+			String formattedClientInfo = "Client: ID:" + id + " " + name;
+			addClientRow(formattedClientInfo);
+		}
+
+		for (String id : removedClients) {
+			removeClientRow(id);
+		}
+	}
+
+	private void sendMute(int clientIdToMute) {
+		String message = String.format("MUTE:%d:%d", clientId, clientIdToMute);
+		sendPacket(message.getBytes());
+	}
+
+	private void sendUnmute(int clientIdToUnmute) {
+		String message = String.format("UNMUTE:%d:%d", clientId, clientIdToUnmute);
+		sendPacket(message.getBytes());
+	}
+
+	private void addClientRow(String formattedClientInfo) {
+		String clientIdStr = formattedClientInfo.split(" ")[1].split(":")[1];
+		int clientIdToToggle = Integer.parseInt(clientIdStr);
+
+		if (clientIdToToggle == clientId) {
+			return;
+		}
+
+		JLabel clientLabel = new JLabel(formattedClientInfo);
+		JToggleButton muteButton = new JToggleButton("Mute");
+
+		muteButton.addActionListener(e -> {
+			if (muteButton.isSelected()) {
+				sendMute(clientIdToToggle);
+				muteButton.setText("Unmute");
+			} else {
+				sendUnmute(clientIdToToggle);
+				muteButton.setText("Mute");
+			}
+		});
+
+		JPanel rowPanel = new JPanel();
+		rowPanel.setLayout(new BorderLayout());
+		rowPanel.add(clientLabel, BorderLayout.CENTER);
+		rowPanel.add(muteButton, BorderLayout.EAST);
+
+		sessionPanelContent.add(rowPanel);
+		sessionPanelContent.revalidate();
+		sessionPanelContent.repaint();
+	}
+
+	private void removeClientRow(String clientId) {
+		for (Component comp : sessionPanelContent.getComponents()) {
+			if (comp instanceof JPanel) {
+				JLabel clientLabel = (JLabel) ((JPanel) comp).getComponent(0);
+				if (clientLabel.getText().contains("ID:" + clientId)) {
+					sessionPanelContent.remove(comp);
+					sessionPanelContent.revalidate();
+					sessionPanelContent.repaint();
+					break;
+				}
+			}
+		}
+	}
+
 	private void connectToServer() throws IOException {
 		String connectMessage = "CONNECT:" + clientName;
 		sendPacket(connectMessage.getBytes());
@@ -581,7 +749,7 @@ public class MidiJamClient extends JFrame {
 		try {
 			sendPacket(midiMessageString.getBytes());
 		} catch (Exception e) {
-			System.err.println("Failed to send MIDI message: " + e.getMessage());
+			sendPacket(midiMessageString.getBytes());
 		}
 	}
 
@@ -620,6 +788,12 @@ public class MidiJamClient extends JFrame {
 		} else if (message.startsWith("COUNT:")) {
 			int count = Integer.parseInt(message.substring(6));
 			updateSessionLabel(count);
+		} else if (message.startsWith("CLIENT_LIST:")) {
+			handleClientListMessage(message);
+		} else if (message.startsWith("MUTE:")) {
+			handleMuteMessage(message);
+		} else if (message.startsWith("UNMUTE:")) {
+			handleUnmuteMessage(message);
 		} else {
 			appendStatus("Unknown message type: " + message);
 		}
@@ -652,9 +826,13 @@ public class MidiJamClient extends JFrame {
 	private void handleMidiMessage(String message) {
 		String[] parts = message.split(":");
 		if (parts.length == 7) {
+			int senderClientId = Integer.parseInt(parts[1]);
 			String senderName = parts[2];
 			int status, channel, data1, data2;
 
+			if (mutedClients.contains(senderClientId)) {
+				return;
+			}
 			try {
 				status = Integer.parseInt(parts[3]);
 				channel = Integer.parseInt(parts[4]);

@@ -109,7 +109,13 @@ public class MidiJamServerCli {
 			int clientPort = packet.getPort();
 
 			if (message.startsWith("CONNECT:")) {
-				handleConnectMessage(clientAddress, clientPort);
+				String[] parts = message.split(":", 2);
+				if (parts.length == 2) {
+					String clientName = parts[1];
+					handleConnectMessage(clientAddress, clientPort, clientName);
+				} else {
+					System.out.println("Invalid CONNECT message format.");
+				}
 			} else if (message.startsWith("DISCONNECT:")) {
 				handleDisconnectMessage(message);
 			} else if (message.startsWith("TEXT:")) {
@@ -118,6 +124,10 @@ public class MidiJamServerCli {
 				handleMidiMessage(message);
 			} else if (message.startsWith("CHORD_KEYS:")) {
 				handleChordKeysMessage(message);
+			} else if (message.startsWith("MUTE:")) {
+				handleMuteMessage(message);
+			} else if (message.startsWith("UNMUTE:")) {
+				handleUnmuteMessage(message);
 			} else {
 				System.out.println("Unknown message type: " + message);
 			}
@@ -128,10 +138,10 @@ public class MidiJamServerCli {
 		}
 	}
 
-	private void handleConnectMessage(InetAddress clientAddress, int clientPort) throws IOException {
+	private void handleConnectMessage(InetAddress clientAddress, int clientPort, String clientName) throws IOException {
 		int clientId = assignClientId();
-		connectedClients.put(clientId, new ClientInfo(clientId, clientAddress, clientPort));
-		System.out.println("Client: " + clientId + " connected");
+		connectedClients.put(clientId, new ClientInfo(clientId, clientAddress, clientPort, clientName));
+		System.out.println("Client: " + clientId + " (" + clientName + ") connected");
 
 		String idMessage = "ID:" + clientId;
 		DatagramPacket idPacket = new DatagramPacket(idMessage.getBytes(), idMessage.length(), clientAddress,
@@ -139,6 +149,7 @@ public class MidiJamServerCli {
 		serverSocket.send(idPacket);
 
 		broadcastClientCount();
+		broadcastClientList();
 	}
 
 	private void handleDisconnectMessage(String message) {
@@ -147,6 +158,7 @@ public class MidiJamServerCli {
 		System.out.println("Client: " + clientId + " disconnected");
 
 		broadcastClientCount();
+		broadcastClientList();
 	}
 
 	private void handleChordKeysMessage(String message) {
@@ -208,9 +220,50 @@ public class MidiJamServerCli {
 		}
 	}
 
+	private void handleMuteMessage(String message) {
+		String[] parts = message.split(":");
+		if (parts.length == 3) {
+			int muterId = Integer.parseInt(parts[1]);
+			int mutedId = Integer.parseInt(parts[2]);
+
+			ClientInfo muterClient = connectedClients.get(muterId);
+			if (muterClient != null) {
+				muterClient.addMutedClient(mutedId);
+				System.out.println("Client " + muterId + " muted client " + mutedId);
+			} else {
+				System.out.println("Client " + muterId + " not found.");
+			}
+		} else {
+			System.out.println("Invalid MUTE message format.");
+		}
+	}
+
+	private void handleUnmuteMessage(String message) {
+		String[] parts = message.split(":");
+		if (parts.length == 3) {
+			int unmuterId = Integer.parseInt(parts[1]);
+			int unmutedId = Integer.parseInt(parts[2]);
+
+			ClientInfo unmuterClient = connectedClients.get(unmuterId);
+			if (unmuterClient != null) {
+				unmuterClient.removeMutedClient(unmutedId);
+				System.out.println("Client " + unmuterId + " unmuted client " + unmutedId);
+			} else {
+				System.out.println("Client " + unmuterId + " not found.");
+			}
+		} else {
+			System.out.println("Invalid UNMUTE message format.");
+		}
+	}
+
 	private void forwardMessageToClients(String message, int senderClientId) {
-		connectedClients.values().stream().filter(client -> client.getId() != senderClientId)
-				.forEach(client -> sendPacketToClient(message, client));
+		connectedClients.values().stream().filter(client -> client.getId() != senderClientId).forEach(client -> {
+			if (client.getMutedClients().contains(senderClientId)) {
+				return;
+			} else {
+				sendPacketToClient(message, client);
+			}
+		});
 	}
 
 	private void sendPacketToClient(String message, ClientInfo client) {
@@ -227,6 +280,18 @@ public class MidiJamServerCli {
 		String countMessage = "COUNT:" + connectedClients.size();
 		for (ClientInfo client : connectedClients.values()) {
 			sendPacketToClient(countMessage, client);
+		}
+	}
+
+	private void broadcastClientList() {
+		StringBuilder clientListMessage = new StringBuilder("CLIENT_LIST:");
+		for (ClientInfo client : connectedClients.values()) {
+			clientListMessage.append(client.getId()).append(":").append(client.getName()).append(",");
+		}
+
+		String message = clientListMessage.toString();
+		for (ClientInfo client : connectedClients.values()) {
+			sendPacketToClient(message, client);
 		}
 	}
 
@@ -260,11 +325,15 @@ public class MidiJamServerCli {
 		private int id;
 		private InetAddress address;
 		private int port;
+		private String name;
+		private Set<Integer> mutedClients;
 
-		public ClientInfo(int id, InetAddress address, int port) {
+		public ClientInfo(int id, InetAddress address, int port, String name) {
 			this.id = id;
 			this.address = address;
 			this.port = port;
+			this.name = name;
+			this.mutedClients = new HashSet<>();
 		}
 
 		public int getId() {
@@ -277,6 +346,22 @@ public class MidiJamServerCli {
 
 		public int getPort() {
 			return port;
+		}
+
+		public String getName() {
+			return name;
+		}
+
+		public Set<Integer> getMutedClients() {
+			return mutedClients;
+		}
+
+		public void addMutedClient(int clientId) {
+			mutedClients.add(clientId);
+		}
+
+		public void removeMutedClient(int clientId) {
+			mutedClients.remove(clientId);
 		}
 	}
 }
