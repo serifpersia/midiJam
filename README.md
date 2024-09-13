@@ -62,6 +62,10 @@ I created a simple [graph](https://github.com/serifpersia/midiJam/blob/main/midi
 
 ![image](https://github.com/user-attachments/assets/9f70ddd7-8f5f-4bf5-bc3f-259385bde8b2)
 
+You can use midi router sub graph [node](https://github.com/serifpersia/midiJam/blob/main/midi%20router.gra) I created to route midi(needs midi channel filter dll's installed to use)
+
+![image](https://github.com/user-attachments/assets/59b77cde-818f-41db-8497-1a86b56b06ae)
+
 ### 4. Chat & Chords
 
 - **Chat**: The client application features a chat window for communication between participants.
