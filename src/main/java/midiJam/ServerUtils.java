@@ -1,5 +1,7 @@
 package midiJam;
 
+import javax.swing.JTextArea;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -11,96 +13,76 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
-public class MidiJamServerCli {
-
+public class ServerUtils {
 	private static final int MAX_ID = 9999;
-	private static final String PORT_FILE_NAME = "port.config";
-	private DatagramSocket serverSocket;
-	private Thread serverThread;
+	final static String PORT_FILE_NAME = "port.config";
+	DatagramSocket serverSocket;
+	Thread serverThread;
 	private Set<Integer> assignedIds = new HashSet<>();
-	private Map<Integer, ClientInfo> connectedClients = new HashMap<>();
-	private volatile boolean running = true;
+	Map<Integer, ClientInfo> connectedClients = new HashMap<>();
+	private Timer pingTimer;
+	Logger logger;
 
-	public static void main(String[] args) {
-		MidiJamServerCli server = new MidiJamServerCli();
-		server.startServer(args);
-	}
-
-	void startServer(String[] args) {
-		int port = loadPortFromFile();
-		for (int i = 0; i < args.length; i++) {
-			if ("-port".equals(args[i]) && i + 1 < args.length) {
-				try {
-					port = Integer.parseInt(args[i + 1]);
-					System.out.println("Port provided from arguments: " + port);
-					savePortToFile(port);
-					break;
-				} catch (NumberFormatException e) {
-					System.err.println("Invalid port number in arguments. Using the file/default port.");
-				}
-			}
-		}
-
-		try {
-			serverSocket = new DatagramSocket(port);
-			System.out.println("Server running at IP: " + InetAddress.getLocalHost().getHostAddress() + ", Port: "
-					+ serverSocket.getLocalPort());
-			startServerThread();
-
-			Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
-
-			while (running) {
-				Thread.sleep(1000);
-			}
-
-		} catch (Exception e) {
-			System.err.println("Failed to start server: " + e.getMessage());
+	public ServerUtils(boolean isGui, JTextArea statusArea) {
+		if (isGui) {
+			this.logger = new Logger(statusArea);
+		} else {
+			this.logger = new Logger();
 		}
 	}
 
-	private int loadPortFromFile() {
-		File file = new File(PORT_FILE_NAME);
+	int loadPortFromFile() {
+		File file = new File(ServerUtils.PORT_FILE_NAME);
 		int defaultPort = 5000;
 		if (file.exists()) {
 			try (Scanner fileScanner = new Scanner(file)) {
 				if (fileScanner.hasNextInt()) {
 					int port = fileScanner.nextInt();
-					System.out.println("Port loaded from file: " + port);
+					logger.log("Port loaded from file: " + port);
 					return port;
 				} else {
-					System.out.println("Port file is empty or invalid. Using default port: " + defaultPort);
+					logger.log("Port file is empty or invalid. Using default port: " + defaultPort);
 				}
 			} catch (IOException e) {
-				System.err.println("Error reading port from file. Using default port: " + defaultPort);
+				logger.log("Error reading port from file. Using default port: " + defaultPort);
 			}
 		} else {
-			System.out.println("Port file not found. Using default port: " + defaultPort);
+			logger.log("Port file not found. Using default port: " + defaultPort);
 			savePortToFile(defaultPort);
 		}
 		return defaultPort;
 	}
 
-	private void savePortToFile(int port) {
-		try (PrintWriter writer = new PrintWriter(PORT_FILE_NAME)) {
+	void savePortToFile(int port) {
+		try (PrintWriter writer = new PrintWriter(ServerUtils.PORT_FILE_NAME)) {
 			writer.println(port);
-			System.out.println("Port saved to file: " + port);
+			logger.log("Port saved to file: " + port);
 		} catch (IOException e) {
-			System.err.println("Failed to save port to file: " + e.getMessage());
+			logger.log("Failed to save port to file: " + e.getMessage());
 		}
 	}
 
-	private void startServerThread() {
+	void startServerThread() {
 		serverThread = new Thread(() -> {
 			byte[] buffer = new byte[1024];
-			while (running && !serverSocket.isClosed()) {
+			while (!serverSocket.isClosed()) {
 				handleClientRequest(buffer);
 			}
 		});
 		serverThread.start();
 	}
 
-	private void handleClientRequest(byte[] buffer) {
+	void closeServer() {
+		if (serverSocket != null && !serverSocket.isClosed()) {
+			serverSocket.close();
+			logger.log("Server socket closed.");
+		}
+	}
+
+	void handleClientRequest(byte[] buffer) {
 		try {
 			DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 			serverSocket.receive(packet);
@@ -114,7 +96,7 @@ public class MidiJamServerCli {
 					String clientName = parts[1];
 					handleConnectMessage(clientAddress, clientPort, clientName);
 				} else {
-					System.out.println("Invalid CONNECT message format.");
+					logger.log("Invalid CONNECT message format.");
 				}
 			} else if (message.startsWith("DISCONNECT:")) {
 				handleDisconnectMessage(message);
@@ -128,20 +110,65 @@ public class MidiJamServerCli {
 				handleMuteMessage(message);
 			} else if (message.startsWith("UNMUTE:")) {
 				handleUnmuteMessage(message);
+			} else if (message.startsWith("PING_RESPONSE:")) {
+				handlePingResponse(message, packet);
 			} else {
-				System.out.println("Unknown message type: " + message);
+				logger.log("Unknown message type: " + message);
 			}
 		} catch (IOException e) {
-			if (running && !serverSocket.isClosed()) {
-				System.err.println("Error: " + e.getMessage());
+			if (!serverSocket.isClosed()) {
+				logger.log("Error: " + e.getMessage());
 			}
+		}
+	}
+
+	private void handlePingResponse(String message, DatagramPacket packet) {
+		String[] parts = message.split(":");
+		long sentTime = Long.parseLong(parts[1]);
+		long roundTripTime = System.currentTimeMillis() - sentTime;
+
+		InetAddress clientAddress = packet.getAddress();
+		int clientPort = packet.getPort();
+
+		for (ClientInfo client : connectedClients.values()) {
+			if (client.getAddress().equals(clientAddress) && client.getPort() == clientPort) {
+				logger.log("Client " + client.getName() + " Ping: " + roundTripTime + "ms");
+				sendPingToAllClients(client.getId(), client.getName(), roundTripTime);
+				return;
+			}
+		}
+	}
+
+	private void sendPingToAllClients(int clientId, String clientName, long ping) {
+		String pingMessage = "PING_INFO:" + clientId + ":" + clientName + ":" + ping + "ms";
+		for (ClientInfo client : connectedClients.values()) {
+			sendPacketToClient(pingMessage, client);
+		}
+	}
+
+	void startPingTimer() {
+		pingTimer = new Timer(true);
+		pingTimer.scheduleAtFixedRate(new TimerTask() {
+			@Override
+			public void run() {
+				pingClients();
+			}
+		}, 0, 5000);
+
+	}
+
+	private void pingClients() {
+		long currentTime = System.currentTimeMillis();
+		for (ClientInfo client : connectedClients.values()) {
+			String pingMessage = "PING:" + currentTime;
+			sendPacketToClient(pingMessage, client);
 		}
 	}
 
 	private void handleConnectMessage(InetAddress clientAddress, int clientPort, String clientName) throws IOException {
 		int clientId = assignClientId();
 		connectedClients.put(clientId, new ClientInfo(clientId, clientAddress, clientPort, clientName));
-		System.out.println("Client: " + clientId + " (" + clientName + ") connected");
+		logger.log("Client: " + clientId + " (" + clientName + ") connected");
 
 		String idMessage = "ID:" + clientId;
 		DatagramPacket idPacket = new DatagramPacket(idMessage.getBytes(), idMessage.length(), clientAddress,
@@ -156,12 +183,12 @@ public class MidiJamServerCli {
 		try {
 			int clientId = Integer.parseInt(message.substring(11));
 			connectedClients.remove(clientId);
-			System.out.println("Client: " + clientId + " disconnected");
+			logger.log("Client: " + clientId + " disconnected");
 
 			broadcastClientCount();
 			broadcastClientList();
 		} catch (NumberFormatException | StringIndexOutOfBoundsException e) {
-			System.out.println("Invalid disconnect message format: " + e.getMessage());
+			logger.log("Invalid disconnect message format: " + e.getMessage());
 		}
 	}
 
@@ -174,12 +201,12 @@ public class MidiJamServerCli {
 			boolean isNoteOn = Boolean.parseBoolean(parts[4]);
 			String chordName = parts[5];
 
-			System.out.printf("CHORD_KEYS from %s (ID: %d): Note=%d, isNoteOn=%b, Chord=%s%n", clientName, clientId,
-					note, isNoteOn, chordName);
+			logger.log(String.format("CHORD_KEYS from %s (ID: %d): Note=%d, isNoteOn=%b, Chord=%s", clientName,
+					clientId, note, isNoteOn, chordName));
 
 			forwardMessageToClients(message, clientId);
 		} else {
-			System.out.println("Invalid CHORD_KEYS message format.");
+			logger.log("Invalid CHORD_KEYS message format.");
 		}
 	}
 
@@ -190,11 +217,11 @@ public class MidiJamServerCli {
 			String clientName = parts[2];
 			String actualMessage = parts[3];
 
-			System.out.println("TEXT Message from " + clientName + ": " + actualMessage);
+			logger.log("TEXT Message from " + clientName + ": " + actualMessage);
 
 			forwardMessageToClients("TEXT:" + clientId + ":" + clientName + ":" + actualMessage, clientId);
 		} else {
-			System.out.println("Invalid TEXT message format.");
+			logger.log("Invalid TEXT message format.");
 		}
 	}
 
@@ -211,16 +238,16 @@ public class MidiJamServerCli {
 				data1 = Integer.parseInt(parts[5]);
 				data2 = Integer.parseInt(parts[6]);
 			} catch (NumberFormatException e) {
-				System.err.println("Error parsing MIDI data from client " + clientName + ": " + e.getMessage());
+				logger.log("Error parsing MIDI data from client " + clientName + ": " + e.getMessage());
 				return;
 			}
 
-			System.out.printf("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d%n", clientName, status, channel,
-					data1, data2);
+			logger.log(String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d", clientName, status,
+					channel, data1, data2));
 
 			forwardMessageToClients(message, clientId);
 		} else {
-			System.out.println("Invalid MIDI message format.");
+			logger.log("Invalid MIDI message format.");
 		}
 	}
 
@@ -233,12 +260,12 @@ public class MidiJamServerCli {
 			ClientInfo muterClient = connectedClients.get(muterId);
 			if (muterClient != null) {
 				muterClient.addMutedClient(mutedId);
-				System.out.println("Client " + muterId + " muted client " + mutedId);
+				logger.log("Client " + muterId + " muted client " + mutedId);
 			} else {
-				System.out.println("Client " + muterId + " not found.");
+				logger.log("Client " + muterId + " not found.");
 			}
 		} else {
-			System.out.println("Invalid MUTE message format.");
+			logger.log("Invalid MUTE message format.");
 		}
 	}
 
@@ -251,17 +278,16 @@ public class MidiJamServerCli {
 			ClientInfo unmuterClient = connectedClients.get(unmuterId);
 			if (unmuterClient != null) {
 				unmuterClient.removeMutedClient(unmutedId);
-				System.out.println("Client " + unmuterId + " unmuted client " + unmutedId);
+				logger.log("Client " + unmuterId + " unmuted client " + unmutedId);
 			} else {
-				System.out.println("Client " + unmuterId + " not found.");
+				logger.log("Client " + unmuterId + " not found.");
 			}
 		} else {
-			System.out.println("Invalid UNMUTE message format.");
+			logger.log("Invalid UNMUTE message format.");
 		}
 	}
 
 	private void forwardMessageToClients(String message, int senderClientId) {
-
 		boolean isMutedMessage = message.startsWith("MIDI:") || message.startsWith("CHORD_KEYS:");
 
 		connectedClients.values().stream().filter(client -> client.getId() != senderClientId).forEach(client -> {
@@ -281,7 +307,7 @@ public class MidiJamServerCli {
 			DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client.getAddress(), client.getPort());
 			serverSocket.send(packet);
 		} catch (Exception e) {
-			System.err.println("Failed to forward message to ID: " + client.getId() + ": " + e.getMessage());
+			logger.log("Failed to forward message to ID: " + client.getId() + ": " + e.getMessage());
 		}
 	}
 
@@ -312,22 +338,6 @@ public class MidiJamServerCli {
 			}
 		}
 		throw new RuntimeException("All client IDs are in use.");
-	}
-
-	private void shutdown() {
-		running = false;
-		if (serverSocket != null && !serverSocket.isClosed()) {
-			serverSocket.close();
-		}
-		if (serverThread != null) {
-			serverThread.interrupt();
-			try {
-				serverThread.join();
-			} catch (InterruptedException e) {
-				System.err.println("Server thread interrupted during shutdown: " + e.getMessage());
-			}
-		}
-		System.out.println("Server shutdown complete.");
 	}
 
 	private class ClientInfo {

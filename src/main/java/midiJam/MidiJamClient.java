@@ -7,9 +7,12 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.TimerTask;
+import java.util.Timer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
@@ -65,13 +68,19 @@ public class MidiJamClient extends JFrame {
 
 	public static ChordPanel chordPanelInstance;
 
-	public static StatusIndicatorPanel statusIndicatorPanel;
+	private MultiStatusIndicatorPanel clientConnectionStatePanel;
+	private MultiStatusIndicatorPanel clientMidiActivityStatePanel;
+	private MultiStatusIndicatorPanel clientMuteStatePanel;
 
 	private static Map<String, String> currentClients = new HashMap<>();
 	private JPanel sessionPanelContent;
-	private StatusIndicatorPanel clientStatusPanel;
 
 	private static Set<Integer> mutedClients = new HashSet<>();
+
+	private Map<Integer, JLabel> clientLabels = new HashMap<>();
+	private Map<Integer, Long> clientPingTimestamps = new HashMap<>();
+
+	private static boolean isMuted = false;
 
 	private static final Color[] CHAT_COLORS = { new Color(0, 191, 255), new Color(50, 205, 50), new Color(255, 140, 0),
 			new Color(255, 105, 180), new Color(255, 215, 0), new Color(0, 255, 255), new Color(148, 0, 211),
@@ -96,6 +105,8 @@ public class MidiJamClient extends JFrame {
 		return color;
 	}
 
+	private ClientUtils clientUtils;
+
 	public static void main(String[] args) {
 		EventQueue.invokeLater(() -> {
 			try {
@@ -111,15 +122,25 @@ public class MidiJamClient extends JFrame {
 	public MidiJamClient() throws MidiUnavailableException {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(350, 450);
-		setTitle("midiJam Client v1.0.5");
+		setTitle("midiJam Client v1.0.6");
 		setIconImage(new ImageIcon(getClass().getResource("/logo.png")).getImage());
 		setResizable(false);
 
 		initMidi();
 		initComponents();
-		loadConfiguration();
+
 		setLocationRelativeTo(null);
 
+		clientUtils = new ClientUtils(false, null);
+		loadConfiguration();
+
+		Timer timer = new Timer(true);
+		timer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				checkForGhostClients();
+			}
+		}, 0, 10000);
 		addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
@@ -143,7 +164,7 @@ public class MidiJamClient extends JFrame {
 				midiReceiver.setReceiver(outputDevice.getReceiver());
 				inputDevice.getTransmitter().setReceiver(midiReceiver);
 
-				System.out.println("MIDI Routing started.");
+				clientUtils.logger.log("MIDI Routing started.");
 			} catch (MidiUnavailableException ex) {
 				ex.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Error opening MIDI devices: " + ex.getMessage(), "Error",
@@ -163,7 +184,7 @@ public class MidiJamClient extends JFrame {
 		inputDevice = null;
 		outputDevice = null;
 
-		System.out.println("MIDI Routing stopped.");
+		clientUtils.logger.log("MIDI Routing stopped.");
 	}
 
 	private void initMidi() throws MidiUnavailableException {
@@ -197,12 +218,22 @@ public class MidiJamClient extends JFrame {
 		getContentPane().add(rootTop_Panel, BorderLayout.NORTH);
 		rootTop_Panel.setLayout(new BorderLayout(0, 0));
 
-		statusIndicatorPanel = new StatusIndicatorPanel();
-		rootTop_Panel.add(statusIndicatorPanel, BorderLayout.EAST);
-
 		activeSenderlb = new JLabel("Active Client: None");
 		activeSenderlb.setHorizontalAlignment(SwingConstants.CENTER);
 		rootTop_Panel.add(activeSenderlb, BorderLayout.CENTER);
+
+		JPanel rootGridStatusIndicatorsPanel = new JPanel();
+		rootTop_Panel.add(rootGridStatusIndicatorsPanel, BorderLayout.EAST);
+		rootGridStatusIndicatorsPanel.setLayout(new GridLayout(0, 2, 0, 0));
+
+		clientConnectionStatePanel = new MultiStatusIndicatorPanel(
+				MultiStatusIndicatorPanel.PanelType.CLIENT_CONNECTION_STATE);
+		clientConnectionStatePanel.setPreferredSize(new Dimension(15, 15));
+		rootGridStatusIndicatorsPanel.add(clientConnectionStatePanel);
+
+		clientMidiActivityStatePanel = new MultiStatusIndicatorPanel(
+				MultiStatusIndicatorPanel.PanelType.CLIENT_MIDI_ACTIVITY_STATE);
+		rootGridStatusIndicatorsPanel.add(clientMidiActivityStatePanel);
 
 		JPanel rootCenter_Panel = new JPanel();
 		getContentPane().add(rootCenter_Panel, BorderLayout.CENTER);
@@ -423,7 +454,7 @@ public class MidiJamClient extends JFrame {
 
 					setDevice(inputDevice, outputDevice, channel);
 
-					System.out.println("Configuration loaded from file.");
+					clientUtils.logger.log("Configuration loaded from file.");
 				}
 			} catch (IOException e) {
 				System.err.println("Error reading configuration from file. Using defaults.");
@@ -438,7 +469,7 @@ public class MidiJamClient extends JFrame {
 			writer.println(inputDeviceName);
 			writer.println(outputDeviceName);
 			writer.println(channelName);
-			System.out.println("Configuration saved to file.");
+			clientUtils.logger.log("Configuration saved to file.");
 		} catch (IOException e) {
 			System.err.println("Failed to save configuration to file: " + e.getMessage());
 		}
@@ -509,16 +540,16 @@ public class MidiJamClient extends JFrame {
 					String name = fileScanner.nextLine();
 					if (fileScanner.hasNextLine()) {
 						String hostName = fileScanner.nextLine();
-						System.out.println("Name and HostName loaded from file: " + name + " - " + hostName);
+						clientUtils.logger.log("Name and HostName loaded from file: " + name + " - " + hostName);
 						return new String[] { name, hostName };
 					}
 				}
-				System.out.println("HostName file is incomplete. Using defaults.");
+				clientUtils.logger.log("HostName file is incomplete. Using defaults.");
 			} catch (IOException e) {
 				System.err.println("Error reading Name and HostName from file. Using defaults.");
 			}
 		} else {
-			System.out.println("HostName file not found. Using defaults.");
+			clientUtils.logger.log("HostName file not found. Using defaults.");
 			saveNameAndHostNameToFile(defaultName, defaultHostName);
 		}
 		return new String[] { defaultName, defaultHostName };
@@ -528,7 +559,7 @@ public class MidiJamClient extends JFrame {
 		try (PrintWriter writer = new PrintWriter(HOSTNAME_FILE_NAME)) {
 			writer.println(name);
 			writer.println(hostName);
-			System.out.println("Name and HostName saved to file: " + name + " - " + hostName);
+			clientUtils.logger.log("Name and HostName saved to file: " + name + " - " + hostName);
 		} catch (IOException e) {
 			System.err.println("Failed to save Name and HostName to file: " + e.getMessage());
 		}
@@ -569,6 +600,10 @@ public class MidiJamClient extends JFrame {
 		currentClients = newClients;
 	}
 
+	private void setMuted(boolean mute) {
+		isMuted = mute;
+	}
+
 	private void handleMuteMessage(String message) {
 		String[] parts = message.split(":");
 		if (parts.length == 3) {
@@ -577,12 +612,7 @@ public class MidiJamClient extends JFrame {
 
 			if (clientId == MidiJamClient.clientId) {
 				mutedClients.add(clientIdToMute);
-				appendStatus("You have muted client " + clientIdToMute);
-
-				updateMuteButton(clientIdToMute, true);
 			}
-		} else {
-			appendStatus("Invalid MUTE message format.");
 		}
 	}
 
@@ -594,26 +624,9 @@ public class MidiJamClient extends JFrame {
 
 			if (clientId == MidiJamClient.clientId) {
 				mutedClients.remove(clientIdToUnmute);
-				appendStatus("You have unmuted client " + clientIdToUnmute);
-
-				updateMuteButton(clientIdToUnmute, false);
 			}
 		} else {
 			appendStatus("Invalid UNMUTE message format.");
-		}
-	}
-
-	private void updateMuteButton(int clientId, boolean isMuted) {
-		for (Component comp : sessionPanelContent.getComponents()) {
-			if (comp instanceof JPanel) {
-				JLabel clientLabel = (JLabel) ((JPanel) comp).getComponent(0);
-				if (clientLabel.getText().contains("ID:" + clientId)) {
-					JToggleButton muteButton = (JToggleButton) ((JPanel) comp).getComponent(1);
-					muteButton.setSelected(isMuted);
-					muteButton.setText(isMuted ? "Unmute" : "Mute");
-					break;
-				}
-			}
 		}
 	}
 
@@ -644,21 +657,20 @@ public class MidiJamClient extends JFrame {
 		String clientIdStr = formattedClientInfo.split(" ")[1].split(":")[1];
 		int clientIdToToggle = Integer.parseInt(clientIdStr);
 
-		if (clientIdToToggle == clientId) {
-			return;
-		}
-
 		JPanel row = new JPanel(new GridBagLayout());
-		row.setPreferredSize(new Dimension(0, 45));
+		row.setPreferredSize(new Dimension(0, 25));
 
 		GridBagConstraints gbc = new GridBagConstraints();
 		gbc.fill = GridBagConstraints.BOTH;
 		gbc.insets = new Insets(0, 5, 0, 5);
 
 		JPanel leftPanel = new JPanel(new GridBagLayout());
-		leftPanel.setPreferredSize(new Dimension(0, 45));
-		JLabel clientLabel = new JLabel(formattedClientInfo, SwingConstants.CENTER);
+
+		JLabel clientLabel = new JLabel(formattedClientInfo + " Ping: N/A", SwingConstants.CENTER);
 		leftPanel.add(clientLabel);
+
+		clientLabels.put(clientIdToToggle, clientLabel);
+
 		gbc.weightx = 1.0;
 		gbc.weighty = 1.0;
 		gbc.gridx = 0;
@@ -666,25 +678,37 @@ public class MidiJamClient extends JFrame {
 		row.add(leftPanel, gbc);
 
 		JPanel rightPanel = new JPanel(new GridBagLayout());
-		rightPanel.setPreferredSize(new Dimension(45, 45));
-		clientStatusPanel = new StatusIndicatorPanel();
+		rightPanel.setPreferredSize(new Dimension(50, 50));
 
-		clientStatusPanel.setConnected(true);
-		clientStatusPanel.setToolTipText("Mute/UnMute Client");
+		clientMuteStatePanel = new MultiStatusIndicatorPanel(MultiStatusIndicatorPanel.PanelType.CLIENT_MUTE_STATE);
+		clientMuteStatePanel.setState(false);
+		clientMuteStatePanel.setPreferredSize(new Dimension(25, 25));
+		clientMuteStatePanel.setToolTipText("Mute/UnMute Client");
 
-		clientStatusPanel.setMuteStateListener(new StatusIndicatorPanel.MuteStateListener() {
+		clientMuteStatePanel.setMuteStateListener(new MultiStatusIndicatorPanel.MuteStateListener() {
 			@Override
 			public void onMuted() {
 				sendMute(clientIdToToggle);
+
+				if (clientIdToToggle == clientId) {
+					setMuted(true);
+				}
 			}
 
 			@Override
 			public void onUnmuted() {
 				sendUnmute(clientIdToToggle);
+
+				if (clientIdToToggle == clientId) {
+					setMuted(false);
+				}
+
 			}
+
 		});
 
-		rightPanel.add(clientStatusPanel);
+		rightPanel.add(clientMuteStatePanel);
+
 		gbc.weightx = 0.0;
 		gbc.gridx = 1;
 		gbc.gridy = 0;
@@ -733,8 +757,7 @@ public class MidiJamClient extends JFrame {
 
 				startMidiRouting();
 				receiveMessages();
-				statusIndicatorPanel.setConnected(true);
-				statusIndicatorPanel.setToolTipText("Mute/UnMute Myself");
+				clientConnectionStatePanel.setState(true);
 			} else {
 				showErrorDialog("Failed to receive ID from server.");
 				tglConnect.setSelected(false);
@@ -848,9 +871,60 @@ public class MidiJamClient extends JFrame {
 			handleMuteMessage(message);
 		} else if (message.startsWith("UNMUTE:")) {
 			handleUnmuteMessage(message);
+		} else if (message.startsWith("PING:")) {
+			handlePingRequest(message);
+		} else if (message.startsWith("PING_INFO:")) {
+			handlePingInfoMessage(message);
 		} else {
 			appendStatus("Unknown message type: " + message);
 		}
+	}
+
+	private void handlePingRequest(String message) {
+		String[] parts = message.split(":");
+		long sentTime = Long.parseLong(parts[1]);
+		String pingResponseMessage = "PING_RESPONSE:" + sentTime;
+
+		sendPacket(pingResponseMessage.getBytes());
+
+	}
+
+	private void checkForGhostClients() {
+		long currentTime = System.currentTimeMillis();
+
+		Iterator<Map.Entry<Integer, Long>> iterator = clientPingTimestamps.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<Integer, Long> entry = iterator.next();
+			int clientId = entry.getKey();
+			long lastPingTime = entry.getValue();
+
+			if (currentTime - lastPingTime > 10000) {
+				removeClientRow(String.valueOf(clientId));
+
+				clientLabels.remove(clientId);
+				iterator.remove();
+			}
+		}
+	}
+
+	private void handlePingInfoMessage(String message) {
+		String[] parts = message.split(":");
+		int clientId = Integer.parseInt(parts[1]);
+		// String clientName = parts[2];
+		String ping = parts[3];
+
+		if (clientLabels.containsKey(clientId)) {
+			JLabel clientLabel = clientLabels.get(clientId);
+			String currentText = clientLabel.getText();
+
+			String updatedText = currentText.split("Ping:")[0].trim() + " Ping: " + ping;
+			clientLabel.setText(updatedText);
+
+			clientPingTimestamps.put(clientId, System.currentTimeMillis());
+		}
+
+		// appendStatus("Client " + clientName + " (ID: " + clientId + ") Ping: " +
+		// ping);
 	}
 
 	private void handleChordKeys(String message) {
@@ -902,8 +976,7 @@ public class MidiJamClient extends JFrame {
 			// senderName, status, channel, data1, data2);
 			// SwingUtilities.invokeLater(() -> appendStatus(formattedMessage));
 			SwingUtilities.invokeLater(() -> activeSenderlb.setText("Active Client: " + senderName));
-			statusIndicatorPanel.setActive(true);
-			clientStatusPanel.setActive(true);
+			clientMidiActivityStatePanel.setState(true);
 			sendToMidiDevice(status, channel, data1, data2);
 		} else {
 			// SwingUtilities.invokeLater(() -> appendStatus("Invalid MIDI message
@@ -995,7 +1068,7 @@ public class MidiJamClient extends JFrame {
 				String disconnectMessage = "DISCONNECT:" + clientId;
 				sendPacket(disconnectMessage.getBytes());
 				clientSocket.close();
-				statusIndicatorPanel.setConnected(false);
+				clientConnectionStatePanel.setState(false);
 				appendStatus("Disconnected from server.");
 			}
 		} catch (Exception e) {
@@ -1085,16 +1158,15 @@ public class MidiJamClient extends JFrame {
 				if (isNoteOn) {
 					ChordFunctions.activeNotes.add(note);
 					SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 1));
-
 				} else if (isNoteOff) {
 					ChordFunctions.activeNotes.remove(note);
 					SwingUtilities.invokeLater(() -> chordPanelInstance.piano.setPianoKey(note, 0));
 				}
 
-				ChordFunctions.detectIntervalOrChord(ChordFunctions.activeNotes);
-
-				SwingUtilities
-						.invokeLater(() -> chordPanelInstance.updateChordLabel(clientName, ChordFunctions.chordName));
+				SwingUtilities.invokeLater(() -> {
+					ChordFunctions.detectIntervalOrChord(ChordFunctions.activeNotes);
+					chordPanelInstance.updateChordLabel(clientName, ChordFunctions.chordName);
+				});
 
 				if (command == ShortMessage.NOTE_ON || command == ShortMessage.NOTE_OFF
 						|| command == ShortMessage.CONTROL_CHANGE) {
@@ -1104,7 +1176,7 @@ public class MidiJamClient extends JFrame {
 						msg.setMessage(status, customChannel, data1, data2);
 						outputReceiver.send(msg, -1);
 
-						if (!statusIndicatorPanel.muted) {
+						if (!isMuted) {
 							sendMIDI(msg);
 							sendChordKeys(note, isNoteOn, ChordFunctions.chordName);
 						}

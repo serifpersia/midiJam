@@ -71,7 +71,14 @@ public class DrawPiano extends JPanel {
 	}
 
 	public void setPianoKey(int pitch, int on) {
-		key[pitch - FIRST_KEY_PITCH_OFFSET] = on;
+		int index = pitch - FIRST_KEY_PITCH_OFFSET;
+
+		if (index < 0 || index >= key.length) {
+
+			return;
+		}
+
+		key[index] = on;
 		repaint();
 	}
 
