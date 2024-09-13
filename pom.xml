@@ -32,7 +32,7 @@
 						<configuration>
 							<archive>
 								<manifest>
-									<mainClass>midiJam.MidiJamClient</mainClass>
+									<mainClass>midiJam.MidiJamClientApp</mainClass>
 								</manifest>
 							</archive>
 							<descriptorRefs>
@@ -84,7 +84,7 @@
 								<configuration>
 									<archive>
 										<manifest>
-											<mainClass>midiJam.MidiJamClient</mainClass>
+											<mainClass>midiJam.MidiJamClientApp</mainClass>
 										</manifest>
 									</archive>
 									<descriptorRefs>
