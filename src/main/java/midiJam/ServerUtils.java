@@ -24,6 +24,8 @@ public class ServerUtils {
 	private Set<Integer> assignedIds = new HashSet<>();
 	Map<Integer, ClientInfo> connectedClients = new HashMap<>();
 	private Timer pingTimer;
+	private static final long CLIENT_TIMEOUT_MS = 10000;
+
 	Logger logger;
 
 	public ServerUtils(boolean isGui, JTextArea statusArea) {
@@ -77,9 +79,24 @@ public class ServerUtils {
 
 	void closeServer() {
 		if (serverSocket != null && !serverSocket.isClosed()) {
+
+			broadcastServerShutdown();
+
 			serverSocket.close();
 			logger.log("Server socket closed.");
 		}
+	}
+
+	private void broadcastServerShutdown() {
+		String shutdownMessage = "SERVER_SHUTDOWN";
+
+		for (ClientInfo client : connectedClients.values()) {
+			sendPacketToClient(shutdownMessage, client);
+		}
+
+		logger.log("All clients have been notified of server shutdown.");
+
+		connectedClients.clear();
 	}
 
 	void handleClientRequest(byte[] buffer) {
@@ -132,7 +149,11 @@ public class ServerUtils {
 
 		for (ClientInfo client : connectedClients.values()) {
 			if (client.getAddress().equals(clientAddress) && client.getPort() == clientPort) {
+
+				client.setLastPingTime(System.currentTimeMillis());
+
 				logger.log("Client " + client.getName() + " Ping: " + roundTripTime + "ms");
+
 				sendPingToAllClients(client.getId(), client.getName(), roundTripTime);
 				return;
 			}
@@ -152,9 +173,39 @@ public class ServerUtils {
 			@Override
 			public void run() {
 				pingClients();
+				checkForInactiveClients();
 			}
 		}, 0, 5000);
 
+	}
+
+	private void checkForInactiveClients() {
+		long currentTime = System.currentTimeMillis();
+
+//		logger.log("Checking for inactive clients at time: " + currentTime);
+
+		for (Integer clientId : connectedClients.keySet()) {
+			ClientInfo client = connectedClients.get(clientId);
+			long lastPingTime = client.getLastPingTime();
+			long timeSinceLastPing = currentTime - lastPingTime;
+
+//			logger.log("Client " + clientId + " - Last Ping Time: " + lastPingTime);
+//			logger.log("Client " + clientId + " - Time Since Last Ping: " + timeSinceLastPing + "ms");
+//			logger.log("Client " + clientId + " - Timeout Threshold: " + CLIENT_TIMEOUT_MS + "ms");
+
+			if (timeSinceLastPing > CLIENT_TIMEOUT_MS) {
+				logger.log("Client " + clientId + " has been disconnected due to inactivity. Time Since Last Ping: "
+						+ timeSinceLastPing + "ms");
+				handleDisconnectClient(clientId);
+			}
+		}
+	}
+
+	private void handleDisconnectClient(int clientId) {
+		connectedClients.remove(clientId);
+		logger.log("Client " + clientId + " disconnected due to inactivity.");
+		broadcastClientCount();
+		broadcastClientList();
 	}
 
 	private void pingClients() {
@@ -346,6 +397,7 @@ public class ServerUtils {
 		private int port;
 		private String name;
 		private Set<Integer> mutedClients;
+		private long lastPingTime;
 
 		public ClientInfo(int id, InetAddress address, int port, String name) {
 			this.id = id;
@@ -353,6 +405,7 @@ public class ServerUtils {
 			this.port = port;
 			this.name = name;
 			this.mutedClients = new HashSet<>();
+			this.lastPingTime = System.currentTimeMillis();
 		}
 
 		public int getId() {
@@ -382,5 +435,14 @@ public class ServerUtils {
 		public void removeMutedClient(int clientId) {
 			mutedClients.remove(clientId);
 		}
+
+		public long getLastPingTime() {
+			return lastPingTime;
+		}
+
+		public void setLastPingTime(long lastPingTime) {
+			this.lastPingTime = lastPingTime;
+		}
+
 	}
 }

@@ -230,7 +230,7 @@ public class MidiJamClientGUI extends JFrame {
 
 		clientConnectionStatePanel = new MultiStatusIndicatorPanel(
 				MultiStatusIndicatorPanel.PanelType.CLIENT_CONNECTION_STATE);
-		clientConnectionStatePanel.setPreferredSize(new Dimension(15, 15));
+		clientConnectionStatePanel.setPreferredSize(new Dimension(20, 20));
 		rootGridStatusIndicatorsPanel.add(clientConnectionStatePanel);
 
 		clientMidiActivityStatePanel = new MultiStatusIndicatorPanel(
@@ -532,6 +532,7 @@ public class MidiJamClientGUI extends JFrame {
 				} else {
 					doc.insertString(doc.getLength(), message + "\n", style);
 				}
+				clientUtils.logger.limitLogSize(doc);
 			} catch (BadLocationException e) {
 				e.printStackTrace();
 			}
@@ -581,7 +582,7 @@ public class MidiJamClientGUI extends JFrame {
 
 		clientMuteStatePanel = new MultiStatusIndicatorPanel(MultiStatusIndicatorPanel.PanelType.CLIENT_MUTE_STATE);
 		clientMuteStatePanel.setState(false);
-		clientMuteStatePanel.setPreferredSize(new Dimension(25, 25));
+		clientMuteStatePanel.setPreferredSize(new Dimension(35, 35));
 		clientMuteStatePanel.setToolTipText("Mute/UnMute Client");
 
 		clientMuteStatePanel.setMuteStateListener(new MultiStatusIndicatorPanel.MuteStateListener() {

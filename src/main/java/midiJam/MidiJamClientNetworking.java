@@ -11,6 +11,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 
@@ -27,15 +30,55 @@ public class MidiJamClientNetworking {
 	static String clientName;
 	private Map<String, String> currentClients = new HashMap<>();
 
+	private static final String PING_SERVER_ADDRESS = "8.8.8.8";
+	private static final int PING_INTERVAL_MS = 10000;
+	private Timer connectivityTimer;
+	private boolean isConnected = false;
+
 	public MidiJamClientNetworking(ClientUtils clientUtils, MidiJamClientGUI gui) {
 		this.clientUtils = clientUtils;
 		this.gui = gui;
+	}
+
+	void startConnectivityCheck() {
+		connectivityTimer = new Timer(true);
+		connectivityTimer.scheduleAtFixedRate(new TimerTask() {
+			@Override
+			public void run() {
+				checkNetworkConnection();
+			}
+		}, 0, PING_INTERVAL_MS);
+	}
+
+	private void checkNetworkConnection() {
+		try {
+			InetAddress address = InetAddress.getByName(PING_SERVER_ADDRESS);
+			if (address.isReachable(2000)) {
+				if (!isConnected) {
+
+					isConnected = true;
+				}
+			} else {
+				if (isConnected) {
+					clientUtils.logger.log("Network connection lost. Disconnecting...");
+					disconnectClient();
+					isConnected = false;
+				}
+			}
+		} catch (IOException e) {
+			if (isConnected) {
+				clientUtils.logger.log("Error checking network connection: " + e.getMessage());
+				disconnectClient();
+				isConnected = false;
+			}
+		}
 	}
 
 	void connectClient() {
 		try {
 			gui.tglConnect.setEnabled(false);
 			startClient();
+			startConnectivityCheck();
 		} catch (Exception ex) {
 			clientUtils.logger.log("Failed to connect: " + ex.getMessage());
 		}
@@ -43,6 +86,9 @@ public class MidiJamClientNetworking {
 
 	void disconnectClient() {
 		try {
+			if (connectivityTimer != null) {
+				connectivityTimer.cancel();
+			}
 			closeClient();
 		} catch (Exception ex) {
 			clientUtils.logger.log("Failed to disconnect: " + ex.getMessage());
@@ -78,9 +124,16 @@ public class MidiJamClientNetworking {
 			handlePingRequest(message);
 		} else if (message.startsWith("PING_INFO:")) {
 			handlePingInfoMessage(message);
+		} else if (message.equals("SERVER_SHUTDOWN")) {
+			handleServerShutdown();
 		} else {
 			clientUtils.logger.log("Unknown message type: " + message);
 		}
+	}
+
+	private void handleServerShutdown() {
+		clientUtils.logger.log("Received SERVER_SHUTDOWN message. Disconnecting...");
+		disconnectClient();
 	}
 
 	private void handlePingRequest(String message) {
