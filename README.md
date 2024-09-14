@@ -7,18 +7,9 @@
 **midiJam** is a Java-based server and client application designed for hosting and participating in online MIDI jamming sessions. Unlike audio-based jamming, midiJam uses MIDI data, which consists of small packets that can be transmitted efficiently, even with varying network latencies. This allows musicians to collaborate in real-time with minimal delay.
 
 ![image](https://github.com/user-attachments/assets/191c454f-e7e8-4e20-9924-d5a93673c71c)
+![image](https://github.com/user-attachments/assets/35b98532-8bf3-413f-b935-74de93f53ed2)
+![image](https://github.com/user-attachments/assets/1006f46e-acf6-4d4f-b9b2-3670f381fe4c)
 
-![image](https://github.com/user-attachments/assets/1e3ffdd2-bb5e-419b-8399-a05d05398de8)
-
-![image](https://github.com/user-attachments/assets/6b106755-f24a-481a-a04c-beb4e066f0e3)
-
-![image](https://github.com/user-attachments/assets/30308949-ade0-4094-bcf9-7e5dfde5a4e5)
-
-![image](https://github.com/user-attachments/assets/6362d27f-0aee-4b45-9d8c-67c1e572af95)
-
-![image](https://github.com/user-attachments/assets/491d4f22-077d-4e3c-8bde-a2d85fa44651)
-
-![image](https://github.com/user-attachments/assets/e6cc73be-73cc-4836-ade2-7851c733858f)
 
 ## Download
  [![Release](https://img.shields.io/github/release/serifpersia/midiJam.svg?style=flat-square)](https://github.com/serifpersia/midiJam/releases)
@@ -70,7 +61,13 @@ You can use midi router sub graph [node](https://github.com/serifpersia/midiJam/
 
 - **Chat**: The client application features a chat window for communication between participants.
   
+![image](https://github.com/user-attachments/assets/095a091c-0ce8-4dd2-b797-5a9f631e53f0)
+
+
 - **Chords Tab**: Opens a new window displaying real-time MIDI input from clients on an 88-key virtual piano keyboard. Basic chords are recognized, making it easier to share chord progressions or notes, useful for learning or collaborating with others.
+
+![image](https://github.com/user-attachments/assets/491d4f22-077d-4e3c-8bde-a2d85fa44651)
+![image](https://github.com/user-attachments/assets/e6cc73be-73cc-4836-ade2-7851c733858f)
 
 ## License
 
