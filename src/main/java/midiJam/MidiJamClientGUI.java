@@ -61,7 +61,7 @@ public class MidiJamClientGUI extends JFrame {
 	JLabel lb_inSessionCount;
 	private static int customChannel;
 	private JTextPane statusArea;
-	private JTextField messageField;
+	JTextField messageField;
 	Map<Integer, JLabel> clientLabels = new HashMap<>();
 	Map<Integer, Long> clientPingTimestamps = new HashMap<>();
 
@@ -393,40 +393,14 @@ public class MidiJamClientGUI extends JFrame {
 		JPanel messagePanel = new JPanel(new BorderLayout());
 
 		messageField = new JTextField();
-		messageField.addActionListener(e -> sendMessage());
+		messageField.addActionListener(e -> MidiJamClientNetworking.sendMessage());
 		messagePanel.add(messageField, BorderLayout.CENTER);
 
 		JButton sendButton = new JButton("Send");
-		sendButton.addActionListener(e -> sendMessage());
+		sendButton.addActionListener(e -> MidiJamClientNetworking.sendMessage());
 		messagePanel.add(sendButton, BorderLayout.EAST);
 
 		return messagePanel;
-	}
-
-	private void sendMessage() {
-		String message = messageField.getText().trim();
-		if (message.isEmpty()) {
-			return;
-		}
-
-		if (MidiJamClientNetworking.clientSocket == null || MidiJamClientNetworking.clientSocket.isClosed()) {
-			appendStatus("Client socket is not available.");
-			return;
-		}
-
-		String fullMessage = String.format("TEXT:%s:%s:%s", midiJam.MidiJamClientNetworking.clientId,
-				midiJam.MidiJamClientNetworking.clientName, message);
-		try {
-			MidiJamClientNetworking.sendPacket(fullMessage.getBytes());
-
-			SwingUtilities.invokeLater(() -> {
-				appendColoredStatus(String.format("%s: %s", midiJam.MidiJamClientNetworking.clientName, message),
-						Color.RED);
-				messageField.setText("");
-			});
-		} catch (Exception e) {
-			SwingUtilities.invokeLater(() -> appendStatus("Failed to send message: " + e.getMessage()));
-		}
 	}
 
 	private class CustomScrollBar extends JScrollBar {

@@ -69,7 +69,7 @@ public class ServerUtils {
 
 	void startServerThread() {
 		serverThread = new Thread(() -> {
-			byte[] buffer = new byte[1024];
+			byte[] buffer = new byte[256];
 			while (!serverSocket.isClosed()) {
 				handleClientRequest(buffer);
 			}

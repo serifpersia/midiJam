@@ -102,6 +102,32 @@ public class MidiJamClientNetworking {
 		}
 	}
 
+	void sendMessage() {
+		String message = gui.messageField.getText().trim();
+		if (message.isEmpty()) {
+			return;
+		}
+
+		if (clientSocket == null || clientSocket.isClosed()) {
+			clientUtils.logger.log("Client socket is not available.");
+			return;
+		}
+
+		String fullMessage = String.format("TEXT:%s:%s:%s", midiJam.MidiJamClientNetworking.clientId,
+				midiJam.MidiJamClientNetworking.clientName, message);
+		try {
+			sendPacket(fullMessage.getBytes());
+
+			SwingUtilities.invokeLater(() -> {
+				gui.appendColoredStatus(String.format("%s: %s", midiJam.MidiJamClientNetworking.clientName, message),
+						Color.RED);
+				gui.messageField.setText("");
+			});
+		} catch (Exception e) {
+			SwingUtilities.invokeLater(() -> clientUtils.logger.log("Failed to send message: " + e.getMessage()));
+		}
+	}
+
 	private void handleReceivedMessage(String message) {
 		if (message.startsWith("TEXT:")) {
 			handleTextMessage(message);
@@ -297,7 +323,7 @@ public class MidiJamClientNetworking {
 
 	private void receiveMessages() {
 		new Thread(() -> {
-			byte[] buffer = new byte[1024];
+			byte[] buffer = new byte[256];
 			DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 			while (clientSocket != null && !clientSocket.isClosed()) {
 				try {
@@ -314,7 +340,7 @@ public class MidiJamClientNetworking {
 		String connectMessage = "CONNECT:" + clientName;
 		sendPacket(connectMessage.getBytes());
 
-		byte[] buffer = new byte[1024];
+		byte[] buffer = new byte[256];
 		DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 		clientSocket.setSoTimeout(2000);
 
