@@ -194,8 +194,8 @@ public class ServerUtils {
 //			logger.log("Client " + clientId + " - Timeout Threshold: " + CLIENT_TIMEOUT_MS + "ms");
 
 			if (timeSinceLastPing > CLIENT_TIMEOUT_MS) {
-				logger.log("Client " + clientId + " has been disconnected due to inactivity. Time Since Last Ping: "
-						+ timeSinceLastPing + "ms");
+//				logger.log("Client " + clientId + " has been disconnected due to inactivity. Time Since Last Ping: "
+//						+ timeSinceLastPing + "ms");
 				handleDisconnectClient(clientId);
 			}
 		}

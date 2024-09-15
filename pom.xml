@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.serifpersia.midiJam</groupId>
 	<artifactId>midiJam</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.6</version>
 	<name>midiJam</name>
 
 	<dependencies>
@@ -17,12 +17,10 @@
 
 	<build>
 		<plugins>
-			<!-- Maven Assembly Plugin for creating fat JARs -->
 			<plugin>
 				<artifactId>maven-assembly-plugin</artifactId>
 				<version>3.3.0</version>
 				<executions>
-					<!-- Execution for midiJam Client -->
 					<execution>
 						<id>client-jar</id>
 						<phase>package</phase>
@@ -38,10 +36,10 @@
 							<descriptorRefs>
 								<descriptorRef>jar-with-dependencies</descriptorRef>
 							</descriptorRefs>
-							<finalName>midiJam-client</finalName>
+							<finalName>midiJamClient-${project.version}</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
 						</configuration>
 					</execution>
-					<!-- Execution for midiJam Server -->
 					<execution>
 						<id>server-jar</id>
 						<phase>package</phase>
@@ -57,7 +55,8 @@
 							<descriptorRefs>
 								<descriptorRef>jar-with-dependencies</descriptorRef>
 							</descriptorRefs>
-							<finalName>midiJam-server</finalName>
+							<finalName>midiJamServer-${project.version}</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
 						</configuration>
 					</execution>
 				</executions>
@@ -90,7 +89,8 @@
 									<descriptorRefs>
 										<descriptorRef>jar-with-dependencies</descriptorRef>
 									</descriptorRefs>
-									<finalName>midiJam-client</finalName>
+									<finalName>midiJamClient-${project.version}</finalName>
+									<appendAssemblyId>false</appendAssemblyId>
 								</configuration>
 							</execution>
 						</executions>
@@ -98,6 +98,7 @@
 				</plugins>
 			</build>
 		</profile>
+
 		<profile>
 			<id>server</id>
 			<build>
@@ -122,7 +123,8 @@
 									<descriptorRefs>
 										<descriptorRef>jar-with-dependencies</descriptorRef>
 									</descriptorRefs>
-									<finalName>midiJam-server</finalName>
+									<finalName>midiJamServer-${project.version}</finalName>
+									<appendAssemblyId>false</appendAssemblyId>
 								</configuration>
 							</execution>
 						</executions>
@@ -132,4 +134,3 @@
 		</profile>
 	</profiles>
 </project>
-

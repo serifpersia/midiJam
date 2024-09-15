@@ -63,19 +63,14 @@ public class MidiJamServer extends JFrame {
 	private void initComponents() {
 		getContentPane().setLayout(new BorderLayout());
 
-		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
-		getContentPane().add(tabbedPane, BorderLayout.CENTER);
-
-		JPanel chatPanel = new JPanel();
-		tabbedPane.addTab("Chat", null, chatPanel, null);
-		chatPanel.setLayout(new BorderLayout(0, 0));
-
 		statusArea = new JTextArea();
 		statusArea.setEditable(false);
+
 		JScrollPane statusScrollPane = new JScrollPane(statusArea);
 		statusScrollPane.setBorder(BorderFactory.createTitledBorder("Status"));
 
-		chatPanel.add(statusScrollPane, BorderLayout.CENTER);
+		getContentPane().add(statusScrollPane, BorderLayout.CENTER);
+
 	}
 
 	private int promptForPort() {

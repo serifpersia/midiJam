@@ -30,7 +30,6 @@ public class MidiJamClientNetworking {
 	static String clientName;
 	private Map<String, String> currentClients = new HashMap<>();
 
-	private static final String PING_SERVER_ADDRESS = "8.8.8.8";
 	private static final int PING_INTERVAL_MS = 10000;
 	private Timer connectivityTimer;
 	private boolean isConnected = false;
@@ -52,22 +51,21 @@ public class MidiJamClientNetworking {
 
 	private void checkNetworkConnection() {
 		try {
-			InetAddress address = InetAddress.getByName(PING_SERVER_ADDRESS);
-			if (address.isReachable(2000)) {
+			if (serverAddress != null && serverAddress.isReachable(2000)) {
 				if (!isConnected) {
-
 					isConnected = true;
+					clientUtils.logger.log("Connection to server restored.");
 				}
 			} else {
 				if (isConnected) {
-					clientUtils.logger.log("Network connection lost. Disconnecting...");
+					clientUtils.logger.log("Connection to server lost. Disconnecting...");
 					disconnectClient();
 					isConnected = false;
 				}
 			}
 		} catch (IOException e) {
 			if (isConnected) {
-				clientUtils.logger.log("Error checking network connection: " + e.getMessage());
+				clientUtils.logger.log("Error checking connection to server: " + e.getMessage());
 				disconnectClient();
 				isConnected = false;
 			}
