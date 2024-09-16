@@ -135,6 +135,11 @@ public class MidiJamServer extends JFrame {
 			} catch (Exception e) {
 				serverUtils.logger.log("Failed to start server: " + e.getMessage());
 			}
+
+			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+				serverUtils.closeServer();
+				serverUtils.logger.log("Server closed gracefully.");
+			}));
 		}
 
 	}

@@ -293,10 +293,15 @@ public class ServerUtils {
 				return;
 			}
 
-			logger.log(String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d", clientName, status,
-					channel, data1, data2));
+			long timestamp = System.currentTimeMillis();
 
-			forwardMessageToClients(message, clientId);
+			String messageWithTimestamp = String.format("MIDI:%d:%s:%d:%d:%d:%d:%d", clientId, clientName, status,
+					channel, data1, data2, timestamp);
+
+			logger.log(String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d, Timestamp=%d",
+					clientName, status, channel, data1, data2, timestamp));
+
+			forwardMessageToClients(messageWithTimestamp, clientId);
 		} else {
 			logger.log("Invalid MIDI message format.");
 		}
