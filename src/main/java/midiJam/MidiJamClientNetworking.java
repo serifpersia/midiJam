@@ -218,50 +218,28 @@ public class MidiJamClientNetworking {
 
 	private void handleMidiMessage(String message) {
 		String[] parts = message.split(":");
-		if (parts.length == 8) {
+		if (parts.length == 7) {
 			int senderClientId = Integer.parseInt(parts[1]);
 			String senderName = parts[2];
 			int status, channel, data1, data2;
-			long serverTimestamp;
 
 			if (gui.mutedClients.contains(senderClientId)) {
 				return;
 			}
-
 			try {
 				status = Integer.parseInt(parts[3]);
 				channel = Integer.parseInt(parts[4]);
 				data1 = Integer.parseInt(parts[5]);
 				data2 = Integer.parseInt(parts[6]);
-				serverTimestamp = Long.parseLong(parts[7]);
 			} catch (NumberFormatException e) {
 				SwingUtilities.invokeLater(() -> clientUtils.logger.log("Error parsing MIDI data."));
 				return;
 			}
-
-			long currentTime = System.currentTimeMillis();
-			long networkLatency = (currentTime - serverTimestamp) / 2;
-
-			long maxLatency = getMaxClientLatency();
-			long delayToAdd = maxLatency - networkLatency;
-
-			new Timer().schedule(new TimerTask() {
-				@Override
-				public void run() {
-
-					SwingUtilities.invokeLater(() -> gui.activeSenderlb.setText("Active Client: " + senderName));
-					gui.clientMidiActivityStatePanel.setState(true);
-					gui.sendToMidiDevice(status, channel, data1, data2);
-				}
-			}, delayToAdd);
+			SwingUtilities.invokeLater(() -> gui.activeSenderlb.setText("Active Client: " + senderName));
+			gui.clientMidiActivityStatePanel.setState(true);
+			gui.sendToMidiDevice(status, channel, data1, data2);
 		} else {
-			clientUtils.logger.log("Invalid MIDI message format.");
 		}
-	}
-
-	private long getMaxClientLatency() {
-		return gui.clientPingTimestamps.values().stream().mapToLong(timestamp -> System.currentTimeMillis() - timestamp)
-				.max().orElse(0L);
 	}
 
 	private void handleChordKeys(String message) {
@@ -345,7 +323,7 @@ public class MidiJamClientNetworking {
 
 	private void receiveMessages() {
 		new Thread(() -> {
-			byte[] buffer = new byte[256];
+			byte[] buffer = new byte[512];
 			DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 			while (clientSocket != null && !clientSocket.isClosed()) {
 				try {
@@ -362,7 +340,7 @@ public class MidiJamClientNetworking {
 		String connectMessage = "CONNECT:" + clientName;
 		sendPacket(connectMessage.getBytes());
 
-		byte[] buffer = new byte[256];
+		byte[] buffer = new byte[512];
 		DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 		clientSocket.setSoTimeout(2000);
 

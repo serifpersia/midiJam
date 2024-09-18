@@ -69,7 +69,7 @@ public class ServerUtils {
 
 	void startServerThread() {
 		serverThread = new Thread(() -> {
-			byte[] buffer = new byte[256];
+			byte[] buffer = new byte[512];
 			while (!serverSocket.isClosed()) {
 				handleClientRequest(buffer);
 			}
@@ -293,15 +293,10 @@ public class ServerUtils {
 				return;
 			}
 
-			long timestamp = System.currentTimeMillis();
+			logger.log(String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d", clientName, status,
+					channel, data1, data2));
 
-			String messageWithTimestamp = String.format("MIDI:%d:%s:%d:%d:%d:%d:%d", clientId, clientName, status,
-					channel, data1, data2, timestamp);
-
-			logger.log(String.format("MIDI from %s: Status=%d, Channel=%d, Data1=%d, Data2=%d, Timestamp=%d",
-					clientName, status, channel, data1, data2, timestamp));
-
-			forwardMessageToClients(messageWithTimestamp, clientId);
+			forwardMessageToClients(message, clientId);
 		} else {
 			logger.log("Invalid MIDI message format.");
 		}
